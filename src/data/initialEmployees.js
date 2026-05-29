@@ -35,6 +35,13 @@ const CARS = [
   'Cardenas, Jaime',
 ]
 
+const NO_HYBRID = [
+  'Rodriguez, Edwin',
+  'Ladino, Alejandro',
+  'Agudelo, Carlos',
+  'Espinoza, Paula',
+]
+
 // id, name, role, email, team(letra), subdiscipline, oficina/remoto del Excel
 const RAW = [
   [1, 'Achury, Ashly', 'BIM Technician', 'Ashly.Achury@aecom.com', 'H', 'HVAC', 'Oficina'],
@@ -134,6 +141,7 @@ export const initialEmployees = RAW.map(([item, name, role, email, team, sub, mo
   const isRemote = mode === 'Remoto'
   const isFloating = FLOATERS.includes(name)
   const hasCar = CARS.includes(name)
+  const hybridApproved = !isRemote && !NO_HYBRID.includes(name)
   return {
     id: slugId(name),
     item,
@@ -145,7 +153,7 @@ export const initialEmployees = RAW.map(([item, name, role, email, team, sub, mo
     baseLocation: isRemote ? 'REMOTO' : 'WEWORK',
     baseSeat: '',
     isActive: !isRemote,        // Remotos quedan inactivos en el híbrido
-    hybridApproved: !isRemote,  // Julian González: sin aprobación (caso del transcript)
+    hybridApproved,             // Solo entran a rotacion quienes tienen hibrido aprobado.
     isFloating,
     doubleHomeConsecutive: false,
     avoidConsecutiveHomeDays: false,
