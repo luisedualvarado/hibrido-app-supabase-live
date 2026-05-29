@@ -17,10 +17,11 @@ export default function DailyView({ schedule, employees, summary, floatingResult
     for (const employee of employees) {
       const cell = schedule.cells[`${employee.id}__${date}`]
       if (!cell) continue
-      if (cell.status === 'HOME') home.push(employee)
+      const person = { ...employee, dailySource: cell.source }
+      if (cell.status === 'HOME') home.push(person)
       else if (cell.status === 'OFFICE') {
-        if (employee.baseLocation === 'OFICINA_93') o93.push(employee)
-        else if (employee.baseLocation === 'WEWORK') we.push(employee)
+        if (employee.baseLocation === 'OFICINA_93') o93.push(person)
+        else if (employee.baseLocation === 'WEWORK') we.push(person)
       }
     }
     return { home: home.sort(byName), we: we.sort(byName), o93: o93.sort(byName) }
@@ -127,7 +128,12 @@ function ListCard({ title, people, tone }) {
       <div className="card-body" style={{ maxHeight: 240, overflow: 'auto' }}>
         {people.length === 0 ? <div className="muted">Nadie.</div> : (
           <div className="tag-list">
-            {people.map((person) => <span key={person.id} className={`badge ${tone}`}>{person.name}</span>)}
+            {people.map((person) => (
+              <span key={person.id} className={`badge ${tone}`}>
+                {person.name}
+                {person.dailySource === 'MANUAL' && <small className="badge-suffix">Manual</small>}
+              </span>
+            ))}
           </div>
         )}
       </div>
