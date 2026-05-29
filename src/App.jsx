@@ -14,7 +14,7 @@ import { enforceNoOfficeOvercapacity, generateMonthlySchedule } from './logic/sc
 import { assignParkingForMonth, parkingUsageByDay, assignFloatingSeats, applyManualOverrides } from './logic/parkingGenerator.js'
 import { assignOffice93ForMonth, applyOffice93Assignment } from './logic/locationRotation.js'
 import { buildDailySummary, validateSchedule, buildDashboardKPIs } from './logic/validators.js'
-import { MONTH_LABEL } from './logic/dateUtils.js'
+import { MONTH_LABEL, isHoliday, isOddCalendarDay, isWeekend } from './logic/dateUtils.js'
 
 const TITLES = {
   dashboard: 'Dashboard',
@@ -57,6 +57,27 @@ const PUBLIC_JUNE_OFFICE93_IDS = [
 const PUBLIC_JUNE_PARAMS_OVERRIDE = {
   seats93: 11,
 }
+const PUBLIC_JUNE_EMPLOYEE_OVERRIDES = {
+  'tarazona-elkin': { hybridApproved: false },
+  'cortes-german': { hybridApproved: false, isFloating: true },
+  'salazar-diego': { isFloating: true },
+  'valdez-lianeth-carolina': { isFloating: true },
+}
+const PUBLIC_JUNE_IVONNE_ID = 'hernandez-ivonne'
+const PUBLIC_JUNE_BRAYAN_ID = 'quintero-brayan'
+const PUBLIC_JUNE_BRAYAN_WEEKLY_HOME_LIMIT = 1
+const PUBLIC_JUNE_GERMAN_ID = 'cortes-german'
+const PUBLIC_JUNE_GERMAN_HOME_DATES = new Set([
+  '2026-06-01',
+  '2026-06-04',
+])
+const PUBLIC_JUNE_IVONNE_ABSENCE_DATES = new Set([
+  '2026-06-01',
+  '2026-06-02',
+  '2026-06-03',
+  '2026-06-04',
+  '2026-06-05',
+])
 const STORAGE_KEY = 'hibrido-app-state-v2'
 const BACKUP_KEY = 'hibrido-app-state-v2-backup'
 const BACKUP_HISTORY_KEY = 'hibrido-app-state-v2-backups'
@@ -103,6 +124,68 @@ function loadStoredState() {
     return parseJSON(raw) || {}
   } catch (error) {
     return {}
+  }
+}
+
+function applyPublicJuneOffice93Adjustments(schedule, employees, holidays) {
+  const adjustedEmployees = employees.map((employee) => (
+    PUBLIC_JUNE_EMPLOYEE_OVERRIDES[employee.id]
+      ? { ...employee, ...PUBLIC_JUNE_EMPLOYEE_OVERRIDES[employee.id] }
+      : employee
+  ))
+
+  const cells = { ...schedule.cells }
+  const officeOnlyIds = ['tarazona-elkin', 'cortes-german']
+
+  for (const iso of schedule.days) {
+    if (isWeekend(iso) || isHoliday(iso, holidays)) continue
+
+    for (const employeeId of officeOnlyIds) {
+      const key = `${employeeId}__${iso}`
+      const cell = cells[key]
+      if (employeeId === PUBLIC_JUNE_GERMAN_ID && PUBLIC_JUNE_GERMAN_HOME_DATES.has(iso)) continue
+      if (cell?.status === 'HOME') {
+        cells[key] = { ...cell, status: 'OFFICE', source: 'PUBLIC', alerts: [] }
+      }
+    }
+
+    if (PUBLIC_JUNE_GERMAN_HOME_DATES.has(iso)) {
+      const germanKey = `${PUBLIC_JUNE_GERMAN_ID}__${iso}`
+      const germanCell = cells[germanKey]
+      if (germanCell?.status === 'OFFICE' || germanCell?.status === 'HOME') {
+        cells[germanKey] = { ...germanCell, status: 'HOME', source: 'PUBLIC', alerts: [] }
+      }
+    }
+
+    const ivonneKey = `${PUBLIC_JUNE_IVONNE_ID}__${iso}`
+    const ivonneCell = cells[ivonneKey]
+    if (!ivonneCell) continue
+
+    if (PUBLIC_JUNE_IVONNE_ABSENCE_DATES.has(iso)) {
+      cells[ivonneKey] = { ...ivonneCell, status: 'ABSENCE', source: 'PUBLIC', alerts: [] }
+      continue
+    }
+
+    if (ivonneCell.status !== 'OFFICE' && ivonneCell.status !== 'HOME') continue
+    cells[ivonneKey] = {
+      ...ivonneCell,
+      status: isOddCalendarDay(iso) ? 'HOME' : 'OFFICE',
+      source: 'PUBLIC',
+      alerts: [],
+    }
+  }
+
+  schedule.weeks.forEach((week) => {
+    const brayanHomeDays = week.workdays.filter((iso) => cells[`${PUBLIC_JUNE_BRAYAN_ID}__${iso}`]?.status === 'HOME')
+    brayanHomeDays.slice(PUBLIC_JUNE_BRAYAN_WEEKLY_HOME_LIMIT).forEach((iso) => {
+      const key = `${PUBLIC_JUNE_BRAYAN_ID}__${iso}`
+      cells[key] = { ...cells[key], status: 'OFFICE', source: 'PUBLIC', alerts: [] }
+    })
+  })
+
+  return {
+    employees: adjustedEmployees,
+    schedule: { ...schedule, cells },
   }
 }
 
@@ -193,38 +276,44 @@ export default function App() {
       `${year}-${month}-final`
     )
 
+    const publicJuneAdjusted = PUBLIC_READ_ONLY && year === MIN_YEAR && month === MIN_MONTH
+      ? applyPublicJuneOffice93Adjustments(schedule, effectiveEmployees, holidays)
+      : { schedule, employees: effectiveEmployees }
+    const effectiveSchedule = publicJuneAdjusted.schedule
+    const effectiveEmployeesView = publicJuneAdjusted.employees
+
     const parkingAssignedAuto = assignParkingForMonth({
-      employees: effectiveEmployees,
+      employees: effectiveEmployeesView,
       params: effectiveParams,
       monthIndex: month,
       manualParking,
     })
     const parkingAssigned = (manualParking.length ? manualParking : parkingAssignedAuto).slice(0, effectiveParams.parkingSpots)
 
-    const parkingUsage = parkingUsageByDay(schedule, parkingAssigned, effectiveEmployees, schedule.days)
-    const { result: floatingResult, alerts: floatAlerts } = assignFloatingSeats(schedule, effectiveEmployees, schedule.days, effectiveParams)
+    const parkingUsage = parkingUsageByDay(effectiveSchedule, parkingAssigned, effectiveEmployeesView, effectiveSchedule.days)
+    const { result: floatingResult, alerts: floatAlerts } = assignFloatingSeats(effectiveSchedule, effectiveEmployeesView, effectiveSchedule.days, effectiveParams)
 
     const { summary, alerts: dailyAlerts } = buildDailySummary(
-      schedule,
-      effectiveEmployees,
-      schedule.days,
+      effectiveSchedule,
+      effectiveEmployeesView,
+      effectiveSchedule.days,
       effectiveParams,
       parkingUsage,
       floatingResult,
       holidays
     )
-    const validationAlerts = validateSchedule(schedule, effectiveEmployees, year, month, holidays)
+    const validationAlerts = validateSchedule(effectiveSchedule, effectiveEmployeesView, year, month, holidays)
 
-    const allAlerts = [...schedule.alerts, ...floatAlerts, ...dailyAlerts, ...validationAlerts]
+    const allAlerts = [...effectiveSchedule.alerts, ...floatAlerts, ...dailyAlerts, ...validationAlerts]
       .sort((a, b) => {
         const order = { CRITICAL: 0, WARNING: 1, INFO: 2 }
         return order[a.severity] - order[b.severity]
       })
-    const kpis = buildDashboardKPIs(effectiveEmployees, summary, effectiveParams, parkingAssigned, allAlerts)
+    const kpis = buildDashboardKPIs(effectiveEmployeesView, summary, effectiveParams, parkingAssigned, allAlerts)
 
     return {
-      schedule,
-      effectiveEmployees,
+      schedule: effectiveSchedule,
+      effectiveEmployees: effectiveEmployeesView,
       office93Assigned,
       parkingAssigned,
       parkingUsage,

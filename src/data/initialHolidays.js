@@ -34,4 +34,8 @@ export const defaultParameters = {
 export const initialAbsences = [
   // Ejemplo editable. type: VACATION | ABSENCE | PERMISSION
   // { employeeId: 'cardenas-jaime', startDate: '2026-06-10', endDate: '2026-06-12', type: 'VACATION', notes: '' },
+  { employeeId: 'gallo-ana-maria', startDate: '2026-05-29', endDate: '2026-06-26', type: 'VACATION', notes: '' },
+  { employeeId: 'gonzalez-julian', startDate: '2026-06-04', endDate: '2026-06-15', type: 'VACATION', notes: '' },
+  { employeeId: 'lancheros-rafael', startDate: '2026-06-09', endDate: '2026-06-23', type: 'VACATION', notes: '' },
+  { employeeId: 'desalvador-diego', startDate: '2026-06-19', endDate: '2026-07-03', type: 'VACATION', notes: '' },
 ]
