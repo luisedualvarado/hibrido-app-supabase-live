@@ -1,21 +1,29 @@
-import React, { useState, useMemo } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { AlertList } from './Shared.jsx'
 import { prettyDate, isWeekend } from '../logic/dateUtils.js'
 
 const byName = (a, b) => a.name.localeCompare(b.name, 'es')
 
 export default function DailyView({ schedule, employees, summary, floatingResult, parkingUsage, params, hideAlerts = false }) {
-  const firstWorkday = schedule.days.find((day) => !isWeekend(day)) || schedule.days[0]
+  const workdayOptions = useMemo(() => schedule.days.filter((day) => !isWeekend(day)), [schedule.days])
+  const firstWorkday = workdayOptions[0] || schedule.days[0]
   const [date, setDate] = useState(firstWorkday)
   const byEmp = useMemo(() => Object.fromEntries(employees.map((employee) => [employee.id, employee])), [employees])
 
-  const day = summary.find((item) => item.date === date)
+  useEffect(() => {
+    if (!workdayOptions.includes(date)) {
+      setDate(firstWorkday)
+    }
+  }, [date, firstWorkday, workdayOptions])
+
+  const selectedDate = workdayOptions.includes(date) ? date : firstWorkday
+  const day = summary.find((item) => item.date === selectedDate)
   const groups = useMemo(() => {
     const home = []
     const we = []
     const o93 = []
     for (const employee of employees) {
-      const cell = schedule.cells[`${employee.id}__${date}`]
+      const cell = schedule.cells[`${employee.id}__${selectedDate}`]
       if (!cell) continue
       const person = { ...employee, dailySource: cell.source }
       if (cell.status === 'HOME') home.push(person)
@@ -25,18 +33,18 @@ export default function DailyView({ schedule, employees, summary, floatingResult
       }
     }
     return { home: home.sort(byName), we: we.sort(byName), o93: o93.sort(byName) }
-  }, [employees, schedule, date])
+  }, [employees, schedule, selectedDate])
 
-  const floating = floatingResult?.[date] || { assigned: [], unseated: [] }
-  const parking = parkingUsage?.[date] || []
+  const floating = floatingResult?.[selectedDate] || { assigned: [], unseated: [] }
+  const parking = parkingUsage?.[selectedDate] || []
 
   return (
     <div>
       <div className="filters">
         <div className="fg">
           <label>Fecha</label>
-          <select value={date} onChange={(event) => setDate(event.target.value)}>
-            {schedule.days.filter((day) => !isWeekend(day)).map((day) => (
+          <select value={selectedDate} onChange={(event) => setDate(event.target.value)}>
+            {workdayOptions.map((day) => (
               <option key={day} value={day}>{prettyDate(day)}</option>
             ))}
           </select>
