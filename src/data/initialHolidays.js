@@ -27,7 +27,7 @@ export const initialHolidays = [...initialHolidays2026]
 
 export const defaultParameters = {
   seatsWeWork: 36,
-  seats93: 9,
+  seats93: 11,
   parkingSpots: 3,
 }
 

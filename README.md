@@ -118,8 +118,9 @@ mencionó en la reunión.
 
 ## Flotantes y parqueaderos
 
-- Flotantes: Johana Jimenez, Diego Salazar, Andres Fuentes, Lianeth C. Valdez,
-  Juan Arenas, Juan Pinto. Rotan, tienen TC y ocupan puestos libres de WeWork;
+- Flotantes: Johana Jimenez, Andres Fuentes, Juan Arenas, Juan Pinto, Camilo
+   Dulce, Ana Maria Gallo, Steven Vera y Julian Gonzalez. Rotan, tienen TC y
+   ocupan puestos libres de WeWork;
   si no alcanzan los puestos se genera alerta.
 - Vehículo: Luis Alvarado, Johana Jimenez, Gabriel, Juan Pinto, Diego Salazar,
   Jaime. 3 parqueaderos asignados **por rotación mensual**; un asignado solo

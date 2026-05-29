@@ -21,9 +21,6 @@ const FLOATERS = [
   'Arenas, Juan',
   'Jimenez, Johana',
   'Vera, Steven',
-  'Valdez, Lianeth Carolina',
-  'Salazar, Diego',
-  'Cortes, German',
 ]
 
 const CARS = [
@@ -40,7 +37,41 @@ const NO_HYBRID = [
   'Ladino, Alejandro',
   'Agudelo, Carlos',
   'Espinoza, Paula',
+  'Artunduaga, Angélica',
+  'Archila, Karen',
+  'Castañeda, Kevin',
+  'Perez, Leidy',
+  'Reyes, Oscar',
+  'Salinas, Nelson',
 ]
+
+const DOUBLE_HOME = new Set([
+  'Achury, Ashly',
+  'Almeida, Daniel',
+  'Arenas, Juan',
+  'Bello, Astrid',
+  'Camargo, Jessel',
+  'Cardenas, Jaime',
+  'Desalvador, Diego',
+  'Dulce, Camilo',
+  'Escobar, Andrea',
+  'Gallo, Ana Maria',
+  'Garcia, Gabriel',
+  'Guevara, Luis',
+  'Hernandez, Ivonne',
+  'Hilario, Martin',
+  'Lancheros, Rafael',
+  'Molina, Jessica',
+  'Morales, Jonathan',
+  'Ochoa, Rafael',
+  'Quiroz Millan, Juan',
+  'Rojas, Camilo',
+  'Salazar, Diego',
+  'Tibocha, Jhonattan',
+  'Valdez, Lianeth Carolina',
+  'Velosa, Over',
+  'Vera, Steven',
+])
 
 // id, name, role, email, team(letra), subdiscipline, oficina/remoto del Excel
 const RAW = [
@@ -109,6 +140,12 @@ const RAW = [
   [63, 'Ladino, Alejandro', 'BIM Technician', '', 'I', 'SEG', 'Oficina'],
   [64, 'Agudelo, Carlos', 'BIM Technician', '', 'I', 'SEG', 'Oficina'],
   [65, 'Espinoza, Paula', 'BIM Technician', '', 'I', 'COM', 'Oficina'],
+  [66, 'Artunduaga, Angélica', 'Engineer', '', 'E', 'ELE', 'Oficina'],
+  [67, 'Archila, Karen', 'BIM Technician', '', 'E', 'ELE', 'Oficina'],
+  [68, 'Castañeda, Kevin', 'BIM Technician', '', 'H', 'HVAC', 'Oficina'],
+  [69, 'Perez, Leidy', 'BIM Technician', '', 'E', 'ELE', 'Oficina'],
+  [70, 'Reyes, Oscar', 'BIM Technician', '', 'H', 'HVAC', 'Oficina'],
+  [71, 'Salinas, Nelson', 'Engineer', '', 'H', 'HVAC', 'Oficina'],
 ]
 
 // Restricciones individuales confirmadas en la transcripción del Plan Híbrido.
@@ -141,6 +178,7 @@ export const initialEmployees = RAW.map(([item, name, role, email, team, sub, mo
   const isRemote = mode === 'Remoto'
   const isFloating = FLOATERS.includes(name)
   const hasCar = CARS.includes(name)
+  const doubleHomeConsecutive = DOUBLE_HOME.has(name)
   const hybridApproved = !isRemote && !NO_HYBRID.includes(name)
   return {
     id: slugId(name),
@@ -155,7 +193,7 @@ export const initialEmployees = RAW.map(([item, name, role, email, team, sub, mo
     isActive: !isRemote,        // Remotos quedan inactivos en el híbrido
     hybridApproved,             // Solo entran a rotacion quienes tienen hibrido aprobado.
     isFloating,
-    doubleHomeConsecutive: false,
+    doubleHomeConsecutive,
     avoidConsecutiveHomeDays: false,
     hasCar,
     parkingEligible: hasCar,

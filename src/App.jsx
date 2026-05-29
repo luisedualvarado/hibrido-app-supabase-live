@@ -50,7 +50,13 @@ const PUBLIC_JUNE_OFFICE93_IDS = [
   'hernandez-ivonne',
   'cardenas-jaime',
   'camargo-jessel',
+  'valdez-lianeth-carolina',
+  'salazar-diego',
+  'cortes-german',
 ]
+const PUBLIC_JUNE_PARAMS_OVERRIDE = {
+  seats93: 11,
+}
 const STORAGE_KEY = 'hibrido-app-state-v2'
 const BACKUP_KEY = 'hibrido-app-state-v2-backup'
 const BACKUP_HISTORY_KEY = 'hibrido-app-state-v2-backups'
@@ -162,6 +168,9 @@ export default function App() {
     const publicJuneOffice93 = PUBLIC_READ_ONLY && year === MIN_YEAR && month === MIN_MONTH
       ? PUBLIC_JUNE_OFFICE93_IDS
       : null
+    const effectiveParams = PUBLIC_READ_ONLY && year === MIN_YEAR && month === MIN_MONTH
+      ? { ...params, ...PUBLIC_JUNE_PARAMS_OVERRIDE }
+      : params
     const office93AssignedAuto = assignOffice93ForMonth({ employees, params, monthIndex: month, manualOffice93 })
     const office93Assigned = publicJuneOffice93 || (hasManualOffice93 ? Array.from(new Set(manualOffice93)) : office93AssignedAuto)
     const effectiveEmployees = applyOffice93Assignment(employees, office93Assigned)
@@ -173,33 +182,33 @@ export default function App() {
       manualOverrides,
       month,
       year,
-      params,
+      params: effectiveParams,
       generationSeed: `${year}-${month}`,
     })
     const schedule = enforceNoOfficeOvercapacity(
-      applyManualOverrides(base, manualOverrides, effectiveEmployees, params),
+      applyManualOverrides(base, manualOverrides, effectiveEmployees, effectiveParams),
       effectiveEmployees,
       holidays,
-      params,
+      effectiveParams,
       `${year}-${month}-final`
     )
 
     const parkingAssignedAuto = assignParkingForMonth({
       employees: effectiveEmployees,
-      params,
+      params: effectiveParams,
       monthIndex: month,
       manualParking,
     })
-    const parkingAssigned = (manualParking.length ? manualParking : parkingAssignedAuto).slice(0, params.parkingSpots)
+    const parkingAssigned = (manualParking.length ? manualParking : parkingAssignedAuto).slice(0, effectiveParams.parkingSpots)
 
     const parkingUsage = parkingUsageByDay(schedule, parkingAssigned, effectiveEmployees, schedule.days)
-    const { result: floatingResult, alerts: floatAlerts } = assignFloatingSeats(schedule, effectiveEmployees, schedule.days, params)
+    const { result: floatingResult, alerts: floatAlerts } = assignFloatingSeats(schedule, effectiveEmployees, schedule.days, effectiveParams)
 
     const { summary, alerts: dailyAlerts } = buildDailySummary(
       schedule,
       effectiveEmployees,
       schedule.days,
-      params,
+      effectiveParams,
       parkingUsage,
       floatingResult,
       holidays
@@ -211,7 +220,7 @@ export default function App() {
         const order = { CRITICAL: 0, WARNING: 1, INFO: 2 }
         return order[a.severity] - order[b.severity]
       })
-    const kpis = buildDashboardKPIs(effectiveEmployees, summary, params, parkingAssigned, allAlerts)
+    const kpis = buildDashboardKPIs(effectiveEmployees, summary, effectiveParams, parkingAssigned, allAlerts)
 
     return {
       schedule,
@@ -223,6 +232,7 @@ export default function App() {
       summary,
       allAlerts,
       kpis,
+      effectiveParams,
     }
   }, [employees, holidays, absences, manualOverrides, month, year, params, manualParking, manualOffice93, hasManualOffice93, generationTick])
 
@@ -364,7 +374,7 @@ export default function App() {
               alerts={computed.allAlerts}
               month={month}
               year={year}
-              params={params}
+              params={computed.effectiveParams}
               employees={computed.effectiveEmployees}
               schedule={computed.schedule}
               parkingAssigned={computed.parkingAssigned}
@@ -389,7 +399,7 @@ export default function App() {
               summary={computed.summary}
               floatingResult={computed.floatingResult}
               parkingUsage={computed.parkingUsage}
-              params={params}
+              params={computed.effectiveParams}
               hideAlerts={PUBLIC_READ_ONLY}
             />
           )}
