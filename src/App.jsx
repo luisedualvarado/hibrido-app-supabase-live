@@ -113,6 +113,13 @@ export default function App() {
     setView(PUBLIC_READ_ONLY && !PUBLIC_VIEWS.includes(nextView) ? 'dashboard' : nextView)
   }, [])
 
+  useEffect(() => {
+    if (PUBLIC_READ_ONLY && (year !== MIN_YEAR || month !== MIN_MONTH)) {
+      setYear(MIN_YEAR)
+      setMonth(MIN_MONTH)
+    }
+  }, [month, year])
+
   const setManualOffice93ForPeriod = useCallback((updater) => {
     setManualOffice93ByPeriod((prev) => {
       const current = prev[periodKey] || []
@@ -309,7 +316,7 @@ export default function App() {
             </div>
           </div>
           <div className="topbar-actions">
-            {showPeriodControls && (
+            {showPeriodControls && !PUBLIC_READ_ONLY && (
               <div className="topbar-period">
                 <div className="topbar-field">
                   <label>Mes</label>
