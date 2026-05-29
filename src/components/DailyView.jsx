@@ -4,7 +4,7 @@ import { prettyDate, isWeekend } from '../logic/dateUtils.js'
 
 const byName = (a, b) => a.name.localeCompare(b.name, 'es')
 
-export default function DailyView({ schedule, employees, summary, floatingResult, parkingUsage, params }) {
+export default function DailyView({ schedule, employees, summary, floatingResult, parkingUsage, params, hideAlerts = false }) {
   const firstWorkday = schedule.days.find((day) => !isWeekend(day)) || schedule.days[0]
   const [date, setDate] = useState(firstWorkday)
   const byEmp = useMemo(() => Object.fromEntries(employees.map((employee) => [employee.id, employee])), [employees])
@@ -96,12 +96,14 @@ export default function DailyView({ schedule, employees, summary, floatingResult
             </div>
           </div>
 
-          <div className="card" style={{ marginTop: 18 }}>
-            <div className="card-head"><h3>Alertas del dia</h3></div>
-            <div className="card-body">
-              <AlertList alerts={day.alerts.map((message, index) => ({ id: index, severity: 'WARNING', message }))} empty="Sin alertas para este dia." />
+          {!hideAlerts && (
+            <div className="card" style={{ marginTop: 18 }}>
+              <div className="card-head"><h3>Alertas del dia</h3></div>
+              <div className="card-body">
+                <AlertList alerts={day.alerts.map((message, index) => ({ id: index, severity: 'WARNING', message }))} empty="Sin alertas para este dia." />
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
     </div>

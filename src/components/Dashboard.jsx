@@ -43,6 +43,7 @@ export default function Dashboard({
   employees = [],
   schedule,
   parkingAssigned = [],
+  hideAlerts = false,
 }) {
   const workdays = summary.filter((day) => !day.isHoliday)
   const maxHome = Math.max(1, ...workdays.map((day) => day.totalHome))
@@ -81,12 +82,12 @@ export default function Dashboard({
   )
 
   let semColor = 'green'
-  if (kpis.criticalAlerts > 0) semColor = 'red'
-  else if (kpis.warningAlerts > 0 || kpis.offTargetDays > 0) semColor = 'amber'
+  if (!hideAlerts && kpis.criticalAlerts > 0) semColor = 'red'
+  else if (!hideAlerts && (kpis.warningAlerts > 0 || kpis.offTargetDays > 0)) semColor = 'amber'
 
   const actionItems = [
-    kpis.criticalAlerts > 0 && `${kpis.criticalAlerts} alerta(s) critica(s) antes de publicar.`,
-    (overWeDays + over93Days) > 0 && `${overWeDays + over93Days} dia(s) con sobrecupo de oficina.`,
+    !hideAlerts && kpis.criticalAlerts > 0 && `${kpis.criticalAlerts} alerta(s) critica(s) antes de publicar.`,
+    !hideAlerts && (overWeDays + over93Days) > 0 && `${overWeDays + over93Days} dia(s) con sobrecupo de oficina.`,
     kpis.carsNoParking > 0 && `${kpis.carsNoParking} persona(s) con carro quedaron sin cupo mensual.`,
     fairnessGap > 1 && `La rotacion no esta pareja: diferencia de ${fairnessGap} dia(s) de TC.`,
   ].filter(Boolean)
@@ -126,10 +127,14 @@ export default function Dashboard({
           tone={kpis.offTargetDays > 0 ? 'red' : 'green'} />
         <KpiCard label="Parqueaderos" value={`${kpis.parkingAssigned}/${kpis.parkingAvailable}`}
           hint={kpis.carsNoParking > 0 ? `${kpis.carsNoParking} con carro sin cupo` : 'asignados'} />
-        <KpiCard label="Alertas criticas" value={kpis.criticalAlerts}
-          tone={kpis.criticalAlerts > 0 ? 'red' : 'green'} />
-        <KpiCard label="Advertencias" value={kpis.warningAlerts}
-          tone={kpis.warningAlerts > 0 ? 'amber' : 'green'} />
+        {!hideAlerts && (
+          <KpiCard label="Alertas criticas" value={kpis.criticalAlerts}
+            tone={kpis.criticalAlerts > 0 ? 'red' : 'green'} />
+        )}
+        {!hideAlerts && (
+          <KpiCard label="Advertencias" value={kpis.warningAlerts}
+            tone={kpis.warningAlerts > 0 ? 'amber' : 'green'} />
+        )}
       </div>
 
       <div className="grid2 dashboard-section">
@@ -175,7 +180,7 @@ export default function Dashboard({
               <div className="empty compact">No hay acciones pendientes para este mes.</div>
             )}
             <div className="dashboard-note">
-              {mainRiskDays.length} dia(s) concentran riesgos operativos. Revisa las alertas y la vista diaria.
+              {mainRiskDays.length} dia(s) concentran riesgos operativos. Revisa la vista diaria.
             </div>
           </div>
         </div>
@@ -242,14 +247,16 @@ export default function Dashboard({
           </div>
         </div>
       </div>
-      <div className="grid2 dashboard-section">
-        <div className="card">
-          <div className="card-head"><h3>Alertas ({alerts.length})</h3></div>
-          <div className="card-body" style={{ maxHeight: 280, overflow: 'auto' }}>
-            <AlertList alerts={alerts.slice(0, 40)} />
+      {!hideAlerts && (
+        <div className="grid2 dashboard-section">
+          <div className="card">
+            <div className="card-head"><h3>Alertas ({alerts.length})</h3></div>
+            <div className="card-body" style={{ maxHeight: 280, overflow: 'auto' }}>
+              <AlertList alerts={alerts.slice(0, 40)} />
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

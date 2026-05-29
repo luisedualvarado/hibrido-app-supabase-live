@@ -27,7 +27,7 @@ function cellClass(cell, employee) {
   return employee.baseLocation === 'OFICINA_93' ? 'OFFICE O93' : 'OFFICE WEWORK'
 }
 
-export default function MonthlySchedule({ schedule, employees, onSaveOverride, onDeleteOverride, manualOverrides, readOnly = false }) {
+export default function MonthlySchedule({ schedule, employees, onSaveOverride, onDeleteOverride, manualOverrides, readOnly = false, hideAlerts = false }) {
   const [search, setSearch] = useState('')
   const [loc, setLoc] = useState('ALL')
   const [disc, setDisc] = useState('ALL')
@@ -45,7 +45,7 @@ export default function MonthlySchedule({ schedule, employees, onSaveOverride, o
     if (disc !== 'ALL' && e.discipline !== disc) return false
     if (onlyFloating && !e.isFloating) return false
     if (onlyCar && !e.hasCar) return false
-    if (onlyAlert) {
+    if (onlyAlert && !hideAlerts) {
       const has = schedule.days.some((iso) => {
         const c = schedule.cells[`${e.id}__${iso}`]
         return c && c.alerts && c.alerts.length
@@ -86,7 +86,7 @@ export default function MonthlySchedule({ schedule, employees, onSaveOverride, o
           <div className="row" style={{ gap: 8 }}>
             <button className={`btn btn-sm ${onlyFloating ? 'btn-primary' : ''}`} onClick={() => setOnlyFloating((v) => !v)}>Flotantes</button>
             <button className={`btn btn-sm ${onlyCar ? 'btn-primary' : ''}`} onClick={() => setOnlyCar((v) => !v)}>Con carro</button>
-            <button className={`btn btn-sm ${onlyAlert ? 'btn-primary' : ''}`} onClick={() => setOnlyAlert((v) => !v)}>Con alerta</button>
+            {!hideAlerts && <button className={`btn btn-sm ${onlyAlert ? 'btn-primary' : ''}`} onClick={() => setOnlyAlert((v) => !v)}>Con alerta</button>}
           </div>
         </div>
       </div>
@@ -115,13 +115,13 @@ export default function MonthlySchedule({ schedule, employees, onSaveOverride, o
                 {schedule.days.map((iso) => {
                   const c = schedule.cells[`${e.id}__${iso}`]
                   if (!c) return <td key={iso} className="daycell" />
-                  const alertTone = cellAlertTone(c)
+                  const alertTone = hideAlerts ? '' : cellAlertTone(c)
                   const isManual = c.source === 'MANUAL'
                   return (
                     <td key={iso} className="daycell">
                       <div
                         className={`cell ${cellClass(c, e)} ${readOnly ? 'readOnly' : ''} ${alertTone === 'red' ? 'hasAlert' : ''} ${alertTone === 'amber' || (isManual && !alertTone) ? 'hasNotice' : ''}`}
-                        title={c.alerts && c.alerts.join(' · ')}
+                        title={hideAlerts ? '' : c.alerts && c.alerts.join(' · ')}
                         onClick={() => {
                           if (!readOnly) setEditing({ employee: e, iso, cell: c })
                         }}
@@ -145,8 +145,8 @@ export default function MonthlySchedule({ schedule, employees, onSaveOverride, o
         <span><span className="lg-chip" style={{ background: '#f4ecff', border: '1px dashed #8d6be8' }} /> VAC · Vacaciones</span>
         <span><span className="lg-chip" style={{ background: 'var(--gray-300)' }} /> FES · Festivo</span>
         <span><span className="lg-chip" style={{ background: 'var(--orange-bg)' }} /> AUS · Ausencia</span>
-        <span><span className="lg-chip" style={{ boxShadow: 'inset 0 0 0 2px var(--red)' }} /> Borde rojo · Restricción no cumplida</span>
-        <span><span className="lg-chip" style={{ boxShadow: 'inset 0 0 0 2px var(--amber)' }} /> Borde ámbar · Aviso o ajuste</span>
+        {!hideAlerts && <span><span className="lg-chip" style={{ boxShadow: 'inset 0 0 0 2px var(--red)' }} /> Borde rojo · Restricción no cumplida</span>}
+        {!hideAlerts && <span><span className="lg-chip" style={{ boxShadow: 'inset 0 0 0 2px var(--amber)' }} /> Borde ámbar · Aviso o ajuste</span>}
       </div>
 
       {editing && (

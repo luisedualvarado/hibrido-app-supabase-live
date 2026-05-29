@@ -350,6 +350,7 @@ export default function App() {
               employees={computed.effectiveEmployees}
               schedule={computed.schedule}
               parkingAssigned={computed.parkingAssigned}
+              hideAlerts={PUBLIC_READ_ONLY}
             />
           )}
           {view === 'monthly' && (
@@ -360,6 +361,7 @@ export default function App() {
               onDeleteOverride={deleteOverride}
               manualOverrides={manualOverrides}
               readOnly={PUBLIC_READ_ONLY}
+              hideAlerts={PUBLIC_READ_ONLY}
             />
           )}
           {view === 'daily' && (
@@ -370,6 +372,7 @@ export default function App() {
               floatingResult={computed.floatingResult}
               parkingUsage={computed.parkingUsage}
               params={params}
+              hideAlerts={PUBLIC_READ_ONLY}
             />
           )}
           {view === 'people' && <People employees={employees} setEmployees={setEmployees} onDeleteEmployee={deleteEmployee} />}
