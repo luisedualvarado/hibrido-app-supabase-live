@@ -39,9 +39,13 @@ const PUBLIC_READ_ONLY = import.meta.env.VITE_PUBLIC_READ_ONLY === 'true'
 const PUBLIC_VIEWS = ['dashboard', 'monthly', 'daily']
 const PUBLIC_JUNE_OFFICE93_IDS = [
   'hilario-martin',
+  'rodriguez-edwin',
+  'ladino-alejandro',
   'quintero-brayan',
   'tarazona-elkin',
   'olea-david',
+  'agudelo-carlos',
+  'espinoza-paula',
   'plazas-paula',
   'hernandez-ivonne',
   'cardenas-jaime',

@@ -98,6 +98,10 @@ const RAW = [
   [59, 'Rodriguez, Sofia', 'BIM Technician', 'sofia.rodriguez@aecom.com', 'E', 'ELE', 'Oficina'],
   [60, 'Barboza, Liset', 'BIM Technician', 'Lizet.barbosa@aecom.com', 'H', 'HVAC', 'Oficina'],
   [61, 'Teheran, Gabriel', 'Engineer', 'gabriel.teheran@aecom.com', 'H', 'HVAC', 'Oficina'],
+  [62, 'Rodriguez, Edwin', 'Engineer', '', 'I', 'SEG', 'Oficina'],
+  [63, 'Ladino, Alejandro', 'BIM Technician', '', 'I', 'SEG', 'Oficina'],
+  [64, 'Agudelo, Carlos', 'BIM Technician', '', 'I', 'SEG', 'Oficina'],
+  [65, 'Espinoza, Paula', 'BIM Technician', '', 'I', 'COM', 'Oficina'],
 ]
 
 // Restricciones individuales confirmadas en la transcripción del Plan Híbrido.
