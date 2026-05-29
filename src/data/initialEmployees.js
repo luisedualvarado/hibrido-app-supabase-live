@@ -13,12 +13,17 @@
 // especiales se muestran solo como "Restricción aprobada" / "Condición especial".
 
 const FLOATERS = [
-  'Jimenez, Johana',
-  'Salazar, Diego',
+  'González, Julian',
+  'Dulce, Camilo',
   'Fuentes, Andres',
-  'Valdez, Lianeth Carolina',
-  'Arenas, Juan',
+  'Gallo, Ana Maria',
   'Pinto, Juan Felipe',
+  'Arenas, Juan',
+  'Jimenez, Johana',
+  'Vera, Steven',
+  'Valdez, Lianeth Carolina',
+  'Salazar, Diego',
+  'Cortes, German',
 ]
 
 const CARS = [

@@ -89,21 +89,22 @@ function loadStoredState() {
 export default function App() {
   const now = new Date()
   const stored = useMemo(() => loadStoredState(), [])
+  const editableStored = PUBLIC_READ_ONLY ? {} : stored
   const initialPeriod = useMemo(() => normalizePeriod(
-    typeof stored.year === 'number' ? stored.year : now.getFullYear(),
-    typeof stored.month === 'number' ? stored.month : now.getMonth()
-  ), [stored, now])
+    typeof editableStored.year === 'number' ? editableStored.year : now.getFullYear(),
+    typeof editableStored.month === 'number' ? editableStored.month : now.getMonth()
+  ), [editableStored, now])
   const [view, setView] = useState('dashboard')
   const showPeriodControls = ['dashboard', 'monthly', 'daily', 'office93'].includes(view)
-  const [employees, setEmployees] = useState(stored.employees || initialEmployees)
-  const [holidays, setHolidays] = useState(stored.holidays || initialHolidays)
-  const [absences, setAbsences] = useState(stored.absences || initialAbsences)
-  const [manualOverrides, setManualOverrides] = useState(stored.manualOverrides || [])
-  const [params, setParams] = useState(stored.params || defaultParameters)
+  const [employees, setEmployees] = useState(editableStored.employees || initialEmployees)
+  const [holidays, setHolidays] = useState(editableStored.holidays || initialHolidays)
+  const [absences, setAbsences] = useState(editableStored.absences || initialAbsences)
+  const [manualOverrides, setManualOverrides] = useState(editableStored.manualOverrides || [])
+  const [params, setParams] = useState(editableStored.params || defaultParameters)
   const [month, setMonth] = useState(initialPeriod.month)
   const [year, setYear] = useState(initialPeriod.year)
-  const [manualParking, setManualParking] = useState(stored.manualParking || [])
-  const [manualOffice93ByPeriod, setManualOffice93ByPeriod] = useState(stored.manualOffice93ByPeriod || {})
+  const [manualParking, setManualParking] = useState(editableStored.manualParking || [])
+  const [manualOffice93ByPeriod, setManualOffice93ByPeriod] = useState(editableStored.manualOffice93ByPeriod || {})
   const [generationTick, setGenerationTick] = useState(0)
   const periodKey = periodKeyFor(year, month)
   const hasManualOffice93 = Object.prototype.hasOwnProperty.call(manualOffice93ByPeriod, periodKey)
