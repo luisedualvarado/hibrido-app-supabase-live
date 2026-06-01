@@ -81,6 +81,9 @@ const PUBLIC_JUNE_IVONNE_ABSENCE_DATES = new Set([
 const STORAGE_KEY = 'hibrido-app-state-v2'
 const BACKUP_KEY = 'hibrido-app-state-v2-backup'
 const BACKUP_HISTORY_KEY = 'hibrido-app-state-v2-backups'
+const ADMIN_SESSION_KEY = 'hibrido-app-admin-session'
+const ADMIN_USERNAME = import.meta.env.VITE_ADMIN_USERNAME || 'admin'
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123'
 
 function normalizePeriod(year, month) {
   const safeYear = Number.isFinite(year) ? year : MIN_YEAR
@@ -124,6 +127,14 @@ function loadStoredState() {
     return parseJSON(raw) || {}
   } catch (error) {
     return {}
+  }
+}
+
+function loadAdminSession() {
+  try {
+    return window.sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true'
+  } catch (error) {
+    return false
   }
 }
 
@@ -192,7 +203,10 @@ function applyPublicJuneOffice93Adjustments(schedule, employees, holidays) {
 export default function App() {
   const now = new Date()
   const stored = useMemo(() => loadStoredState(), [])
-  const editableStored = PUBLIC_READ_ONLY ? {} : stored
+  const [isAdmin, setIsAdmin] = useState(() => loadAdminSession())
+  const [authError, setAuthError] = useState('')
+  const isReadOnly = PUBLIC_READ_ONLY && !isAdmin
+  const editableStored = isReadOnly ? {} : stored
   const initialPeriod = useMemo(() => normalizePeriod(
     typeof editableStored.year === 'number' ? editableStored.year : now.getFullYear(),
     typeof editableStored.month === 'number' ? editableStored.month : now.getMonth()
@@ -214,15 +228,41 @@ export default function App() {
   const manualOffice93 = hasManualOffice93 ? manualOffice93ByPeriod[periodKey] : EMPTY_ARRAY
 
   const setSafeView = useCallback((nextView) => {
-    setView(PUBLIC_READ_ONLY && !PUBLIC_VIEWS.includes(nextView) ? 'dashboard' : nextView)
+    setView(isReadOnly && !PUBLIC_VIEWS.includes(nextView) ? 'dashboard' : nextView)
+  }, [isReadOnly])
+
+  const handleAdminLogin = useCallback((username, password) => {
+    const normalizedUsername = username.trim()
+    if (normalizedUsername !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
+      setAuthError('Credenciales admin invalidas.')
+      return false
+    }
+
+    window.sessionStorage.setItem(ADMIN_SESSION_KEY, 'true')
+    setIsAdmin(true)
+    setAuthError('')
+    return true
+  }, [])
+
+  const handleAdminLogout = useCallback(() => {
+    window.sessionStorage.removeItem(ADMIN_SESSION_KEY)
+    setIsAdmin(false)
+    setAuthError('')
+    setView('dashboard')
   }, [])
 
   useEffect(() => {
-    if (PUBLIC_READ_ONLY && (year !== MIN_YEAR || month !== MIN_MONTH)) {
+    if (isReadOnly && (year !== MIN_YEAR || month !== MIN_MONTH)) {
       setYear(MIN_YEAR)
       setMonth(MIN_MONTH)
     }
-  }, [month, year])
+  }, [isReadOnly, month, year])
+
+  useEffect(() => {
+    if (!PUBLIC_READ_ONLY) return
+    if (isAdmin) window.sessionStorage.setItem(ADMIN_SESSION_KEY, 'true')
+    else window.sessionStorage.removeItem(ADMIN_SESSION_KEY)
+  }, [isAdmin])
 
   const setManualOffice93ForPeriod = useCallback((updater) => {
     setManualOffice93ByPeriod((prev) => {
@@ -248,10 +288,10 @@ export default function App() {
   }
 
   const computed = useMemo(() => {
-    const publicJuneOffice93 = PUBLIC_READ_ONLY && year === MIN_YEAR && month === MIN_MONTH
+    const publicJuneOffice93 = isReadOnly && year === MIN_YEAR && month === MIN_MONTH
       ? PUBLIC_JUNE_OFFICE93_IDS
       : null
-    const effectiveParams = PUBLIC_READ_ONLY && year === MIN_YEAR && month === MIN_MONTH
+    const effectiveParams = isReadOnly && year === MIN_YEAR && month === MIN_MONTH
       ? { ...params, ...PUBLIC_JUNE_PARAMS_OVERRIDE }
       : params
     const office93AssignedAuto = assignOffice93ForMonth({ employees, params, monthIndex: month, manualOffice93 })
@@ -276,7 +316,7 @@ export default function App() {
       `${year}-${month}-final`
     )
 
-    const publicJuneAdjusted = PUBLIC_READ_ONLY && year === MIN_YEAR && month === MIN_MONTH
+    const publicJuneAdjusted = isReadOnly && year === MIN_YEAR && month === MIN_MONTH
       ? applyPublicJuneOffice93Adjustments(schedule, effectiveEmployees, holidays)
       : { schedule, employees: effectiveEmployees }
     const effectiveSchedule = publicJuneAdjusted.schedule
@@ -323,7 +363,7 @@ export default function App() {
       kpis,
       effectiveParams,
     }
-  }, [employees, holidays, absences, manualOverrides, month, year, params, manualParking, manualOffice93, hasManualOffice93, generationTick])
+  }, [employees, holidays, absences, manualOverrides, month, year, params, manualParking, manualOffice93, hasManualOffice93, generationTick, isReadOnly])
 
   const saveOverride = useCallback((employeeId, date, status, reason) => {
     setManualOverrides((prev) => {
@@ -399,6 +439,7 @@ export default function App() {
   }
 
   useEffect(() => {
+    if (isReadOnly) return
     const state = {
       version: 2,
       employees,
@@ -415,15 +456,23 @@ export default function App() {
     const next = JSON.stringify(state)
     if (previous && previous !== next) rememberBackup(previous)
     window.localStorage.setItem(STORAGE_KEY, next)
-  }, [employees, holidays, absences, manualOverrides, params, month, year, manualParking, manualOffice93ByPeriod])
+  }, [employees, holidays, absences, manualOverrides, params, month, year, manualParking, manualOffice93ByPeriod, isReadOnly])
 
   useEffect(() => {
-    if (PUBLIC_READ_ONLY && !PUBLIC_VIEWS.includes(view)) setView('dashboard')
-  }, [view])
+    if (isReadOnly && !PUBLIC_VIEWS.includes(view)) setView('dashboard')
+  }, [isReadOnly, view])
 
   return (
     <div className="app">
-      <Sidebar view={view} setView={setSafeView} readOnly={PUBLIC_READ_ONLY} />
+      <Sidebar
+        view={view}
+        setView={setSafeView}
+        readOnly={isReadOnly}
+        isAdmin={isAdmin}
+        authError={authError}
+        onAdminLogin={handleAdminLogin}
+        onAdminLogout={handleAdminLogout}
+      />
       <div className="main">
         <header className="topbar">
           <div>
@@ -433,7 +482,7 @@ export default function App() {
             </div>
           </div>
           <div className="topbar-actions">
-            {showPeriodControls && !PUBLIC_READ_ONLY && (
+            {showPeriodControls && !isReadOnly && (
               <div className="topbar-period">
                 <div className="topbar-field">
                   <label>Mes</label>
@@ -451,8 +500,8 @@ export default function App() {
                 </div>
               </div>
             )}
-            {!PUBLIC_READ_ONLY && <button className="btn btn-ghost" onClick={clearOverrides}>Limpiar ajustes</button>}
-            {!PUBLIC_READ_ONLY && <button className="btn btn-green" onClick={regenerate}>Generar programacion</button>}
+            {!isReadOnly && <button className="btn btn-ghost" onClick={clearOverrides}>Limpiar ajustes</button>}
+            {!isReadOnly && <button className="btn btn-green" onClick={regenerate}>Generar programacion</button>}
           </div>
         </header>
         <main className="content">
@@ -467,7 +516,7 @@ export default function App() {
               employees={computed.effectiveEmployees}
               schedule={computed.schedule}
               parkingAssigned={computed.parkingAssigned}
-              hideAlerts={PUBLIC_READ_ONLY}
+              hideAlerts={isReadOnly}
             />
           )}
           {view === 'monthly' && (
@@ -477,8 +526,8 @@ export default function App() {
               onSaveOverride={saveOverride}
               onDeleteOverride={deleteOverride}
               manualOverrides={manualOverrides}
-              readOnly={PUBLIC_READ_ONLY}
-              hideAlerts={PUBLIC_READ_ONLY}
+              readOnly={isReadOnly}
+              hideAlerts={isReadOnly}
             />
           )}
           {view === 'daily' && (
@@ -489,7 +538,7 @@ export default function App() {
               floatingResult={computed.floatingResult}
               parkingUsage={computed.parkingUsage}
               params={computed.effectiveParams}
-              hideAlerts={PUBLIC_READ_ONLY}
+              hideAlerts={isReadOnly}
             />
           )}
           {view === 'people' && <People employees={employees} setEmployees={setEmployees} onDeleteEmployee={deleteEmployee} />}

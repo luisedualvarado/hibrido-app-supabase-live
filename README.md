@@ -10,6 +10,10 @@ Los datos viven en memoria (estados de React). Puedes **exportar/importar JSON**
 para conservar una configuración entre sesiones, y exportar CSV de programación,
 resumen diario y alertas.
 
+En el build público, la app abre en modo lectura. El sidebar incluye un acceso
+admin para desbloquear el resto de pestañas con las credenciales definidas en
+`VITE_ADMIN_USERNAME` y `VITE_ADMIN_PASSWORD`.
+
 ## Cómo correrlo
 
 ```bash
@@ -20,6 +24,20 @@ npm run preview  # sirve el build
 ```
 
 Requisitos: Node 18+.
+
+## Acceso admin
+
+Por defecto, tanto en desarrollo como en producción se crean estas
+credenciales:
+
+```bash
+usuario: admin
+contrasena: admin123
+```
+
+Si vas a publicar el sitio, cambia esos valores en `.env.production`. Ten en
+cuenta que esta proteccion es solo del lado del cliente: sirve para ocultar y
+desbloquear la interfaz, no reemplaza autenticacion real con backend.
 
 ## Crear el proyecto desde cero (si lo necesitas)
 

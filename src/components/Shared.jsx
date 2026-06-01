@@ -40,10 +40,30 @@ const NAV = [
   ['export', '⤓', 'Exportar / Importar'],
 ]
 
-export function Sidebar({ view, setView, readOnly = false }) {
+export function Sidebar({
+  view,
+  setView,
+  readOnly = false,
+  isAdmin = false,
+  authError = '',
+  onAdminLogin,
+  onAdminLogout,
+}) {
+  const [username, setUsername] = React.useState('')
+  const [password, setPassword] = React.useState('')
   const navItems = readOnly
     ? NAV.filter(([id]) => ['dashboard', 'monthly', 'daily'].includes(id))
     : NAV
+
+  const handleSubmit = (event) => {
+    event.preventDefault()
+    if (!onAdminLogin) return
+    const ok = onAdminLogin(username, password)
+    if (ok) {
+      setUsername('')
+      setPassword('')
+    }
+  }
 
   return (
     <aside className="sidebar">
@@ -58,6 +78,38 @@ export function Sidebar({ view, setView, readOnly = false }) {
           </button>
         ))}
       </nav>
+      {readOnly && (
+        <form className="admin-access" onSubmit={handleSubmit}>
+          <div className="admin-access-title">Acceso admin</div>
+          <label htmlFor="admin-username">Usuario</label>
+          <input
+            id="admin-username"
+            type="text"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            placeholder="admin"
+            autoComplete="username"
+          />
+          <label htmlFor="admin-password">Contrasena</label>
+          <input
+            id="admin-password"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="Ingresa la contrasena"
+            autoComplete="current-password"
+          />
+          {authError && <div className="admin-access-error">{authError}</div>}
+          <button type="submit" className="btn btn-primary btn-block">Entrar como admin</button>
+        </form>
+      )}
+      {!readOnly && isAdmin && (
+        <div className="admin-access admin-access-active">
+          <div className="admin-access-title">Sesion admin activa</div>
+          <div className="admin-access-copy">Ya puedes abrir y editar todas las pestañas.</div>
+          <button type="button" className="btn btn-ghost btn-block" onClick={onAdminLogout}>Cerrar sesion</button>
+        </div>
+      )}
       <div className="sidebar-foot">
         {readOnly ? 'Vista publica de solo lectura.' : 'Prototipo local · datos en memoria'}
         {!readOnly && <><br />Importa/exporta JSON para persistir.</>}

@@ -67,6 +67,45 @@ body {
 .nav button:hover { background: rgba(255,255,255,.06); color: #fff; }
 .nav button.active { background: var(--navy-500); color: #fff; }
 .nav .ic { font-size: 16px; width: 18px; text-align: center; }
+.admin-access {
+  margin: 0 16px 16px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.1);
+  display: grid;
+  gap: 8px;
+}
+.admin-access-title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #fff;
+}
+.admin-access label {
+  margin-bottom: 0;
+  font-size: 11px;
+  color: #9fb6d3;
+}
+.admin-access input {
+  width: 100%;
+  background: rgba(255,255,255,.95);
+}
+.admin-access-copy {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #dce6f2;
+}
+.admin-access-error {
+  color: #ffd3cd;
+  font-size: 12px;
+  font-weight: 600;
+}
+.admin-access-active {
+  background: rgba(31,157,99,.14);
+  border-color: rgba(31,157,99,.35);
+}
 .sidebar-foot { padding: 14px 18px; border-top: 1px solid rgba(255,255,255,.08); font-size: 11px; color: #6f8aae; }
 
 /* Main */
@@ -101,6 +140,7 @@ body {
 .btn-ghost { border-color: transparent; background: var(--gray-100); }
 .btn-sm { padding: 6px 11px; font-size: 12.5px; }
 .btn-danger { color: var(--red); border-color: var(--red-bg); background: var(--red-bg); }
+.btn-block { width: 100%; justify-content: center; }
 
 select, input[type=text], input[type=date], input[type=number], textarea {
   font-family: var(--sans); font-size: 13.5px; color: var(--ink);
