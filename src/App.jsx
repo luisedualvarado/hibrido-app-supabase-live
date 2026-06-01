@@ -301,10 +301,11 @@ export default function App() {
   }
 
   const computed = useMemo(() => {
-    const publicJuneOffice93 = isReadOnly && year === MIN_YEAR && month === MIN_MONTH
+    const isPublishedJune = PUBLIC_READ_ONLY && year === MIN_YEAR && month === MIN_MONTH
+    const publicJuneOffice93 = isPublishedJune
       ? PUBLIC_JUNE_OFFICE93_IDS
       : null
-    const effectiveParams = isReadOnly && year === MIN_YEAR && month === MIN_MONTH
+    const effectiveParams = isPublishedJune
       ? { ...params, ...PUBLIC_JUNE_PARAMS_OVERRIDE }
       : params
     const office93AssignedAuto = assignOffice93ForMonth({ employees, params, monthIndex: month, manualOffice93 })
@@ -329,7 +330,7 @@ export default function App() {
       `${year}-${month}-final`
     )
 
-    const publicJuneAdjusted = isReadOnly && year === MIN_YEAR && month === MIN_MONTH
+    const publicJuneAdjusted = isPublishedJune
       ? applyPublicJuneOffice93Adjustments(schedule, effectiveEmployees, holidays)
       : { schedule, employees: effectiveEmployees }
     const effectiveSchedule = publicJuneAdjusted.schedule
