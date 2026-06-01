@@ -40,7 +40,7 @@ const EMPTY_ARRAY = []
 const MIN_YEAR = 2026
 const MIN_MONTH = 5
 const PUBLIC_READ_ONLY = import.meta.env.VITE_PUBLIC_READ_ONLY === 'true'
-const PUBLIC_VIEWS = ['dashboard', 'monthly', 'daily', 'desks']
+const PUBLIC_VIEWS = ['dashboard', 'monthly', 'daily', 'desks', 'lockers']
 const PUBLIC_JUNE_OFFICE93_IDS = [
   'hilario-martin',
   'rodriguez-edwin',
