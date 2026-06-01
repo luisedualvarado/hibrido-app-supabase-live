@@ -838,6 +838,28 @@ tr:hover td { background: var(--gray-50); }
 }
 .desk-board-table-wrap { overflow: auto; }
 .desk-board-table { width: 100%; border-collapse: collapse; }
+.desk-week-table th,
+.desk-week-table td {
+  border: 1px solid #272727;
+  padding: 8px 10px;
+  text-align: center;
+  background: #fff;
+}
+.desk-week-table th:first-child,
+.desk-week-table td:first-child {
+  text-align: left;
+  min-width: 210px;
+}
+.desk-week-section-row td {
+  background: #f6f2d8;
+  font-weight: 800;
+}
+.desk-week-section-row td:not(:first-child) {
+  background: #fff8d8;
+}
+.desk-week-person {
+  font-weight: 600;
+}
 .desk-chip {
   display: inline-flex;
   align-items: center;
