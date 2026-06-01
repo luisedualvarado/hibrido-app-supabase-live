@@ -153,10 +153,11 @@ export default function MonthlySchedule({
                   if (!c) return <td key={iso} className="daycell" />
                   const alertTone = hideAlerts ? '' : cellAlertTone(c)
                   const isManual = c.source === 'MANUAL'
+                  const showCellOutline = !hideAlerts && !readOnly
                   return (
                     <td key={iso} className="daycell">
                       <div
-                        className={`cell ${cellClass(c, e)} ${readOnly ? 'readOnly' : ''} ${alertTone === 'red' ? 'hasAlert' : ''} ${alertTone === 'amber' || (isManual && !alertTone) ? 'hasNotice' : ''}`}
+                        className={`cell ${cellClass(c, e)} ${readOnly ? 'readOnly' : ''} ${showCellOutline && alertTone === 'red' ? 'hasAlert' : ''} ${showCellOutline && (alertTone === 'amber' || (isManual && !alertTone)) ? 'hasNotice' : ''}`}
                         title={hideAlerts ? '' : c.alerts && c.alerts.join(' · ')}
                         onClick={() => {
                           if (!readOnly) setEditing({ employee: e, iso, cell: c })
