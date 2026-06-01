@@ -29,7 +29,7 @@ const NAV = [
   ['dashboard', '◧', 'Dashboard'],
   ['monthly', '▦', 'Programación mensual'],
   ['daily', '☀', 'Vista diaria'],
-  ['desks', '⌗', 'Puestos'],
+  ['desks', '⌗', 'Puestos Flotantes'],
   ['people', '☷', 'Personal'],
   ['restrictions', '⚑', 'Restricciones'],
   ['absences', '✈', 'Vacaciones / Ausencias'],

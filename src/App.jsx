@@ -22,7 +22,7 @@ const TITLES = {
   dashboard: 'Dashboard',
   monthly: 'Programacion mensual',
   daily: 'Vista diaria',
-  desks: 'Puestos',
+  desks: 'Puestos Flotantes',
   people: 'Personal',
   restrictions: 'Restricciones',
   absences: 'Vacaciones / Ausencias',
