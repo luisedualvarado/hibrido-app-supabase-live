@@ -6,7 +6,7 @@ import DailyView from './components/DailyView.jsx'
 import FloatingSeats from './components/FloatingSeats.jsx'
 import People from './components/People.jsx'
 import Restrictions from './components/Restrictions.jsx'
-import { Absences, Holidays, Parking, Office93Rotation, ManualOverrides, Settings, ExportPanel } from './components/Panels.jsx'
+import { Absences, Holidays, Parking, Office93Rotation, Lockers, ManualOverrides, Settings, ExportPanel } from './components/Panels.jsx'
 
 import { initialEmployees } from './data/initialEmployees.js'
 import { initialHolidays, initialAbsences, defaultParameters } from './data/initialHolidays.js'
@@ -14,6 +14,7 @@ import { initialHolidays, initialAbsences, defaultParameters } from './data/init
 import { enforceNoOfficeOvercapacity, generateMonthlySchedule } from './logic/scheduleGenerator.js'
 import { assignParkingForMonth, parkingUsageByDay, assignFloatingSeats, applyManualOverrides } from './logic/parkingGenerator.js'
 import { assignOffice93ForMonth, applyOffice93Assignment } from './logic/locationRotation.js'
+import { assignLockersForMonth } from './logic/lockerGenerator.js'
 import { buildDailySummary, validateSchedule, buildDashboardKPIs } from './logic/validators.js'
 import { MONTH_LABEL, isHoliday, isOddCalendarDay, isWeekend } from './logic/dateUtils.js'
 
@@ -27,6 +28,7 @@ const TITLES = {
   absences: 'Vacaciones / Ausencias',
   holidays: 'Festivos',
   office93: 'Oficina 93',
+  lockers: 'Lockers',
   parking: 'Parqueaderos',
   overrides: 'Ajustes manuales',
   settings: 'Configuracion',
@@ -252,16 +254,17 @@ export default function App() {
     typeof editableStored.month === 'number' ? editableStored.month : now.getMonth()
   ), [editableStored, now])
   const [view, setView] = useState('dashboard')
-  const showPeriodControls = ['dashboard', 'monthly', 'daily', 'desks', 'office93'].includes(view)
+  const showPeriodControls = ['dashboard', 'monthly', 'daily', 'desks', 'office93', 'lockers'].includes(view)
   const [employees, setEmployees] = useState(mergeEmployeeSeatDefaults(editableStored.employees || initialEmployees))
   const [holidays, setHolidays] = useState(editableStored.holidays || initialHolidays)
   const [absences, setAbsences] = useState(editableStored.absences || initialAbsences)
   const [manualOverrides, setManualOverrides] = useState(editableStored.manualOverrides || [])
-  const [params, setParams] = useState(editableStored.params || defaultParameters)
+  const [params, setParams] = useState({ ...defaultParameters, ...(editableStored.params || {}) })
   const [month, setMonth] = useState(initialPeriod.month)
   const [year, setYear] = useState(initialPeriod.year)
   const [manualParking, setManualParking] = useState(editableStored.manualParking || [])
   const [manualOffice93ByPeriod, setManualOffice93ByPeriod] = useState(editableStored.manualOffice93ByPeriod || {})
+  const [manualLockersByPeriod, setManualLockersByPeriod] = useState(editableStored.manualLockersByPeriod || {})
   const [manualDeskAssignmentsByPeriod, setManualDeskAssignmentsByPeriod] = useState(editableStored.manualDeskAssignmentsByPeriod || {})
   const [savedWeeksByPeriod, setSavedWeeksByPeriod] = useState(editableStored.savedWeeksByPeriod || {})
   const [didHydrateStoredState, setDidHydrateStoredState] = useState(false)
@@ -269,6 +272,7 @@ export default function App() {
   const periodKey = periodKeyFor(year, month)
   const hasManualOffice93 = Object.prototype.hasOwnProperty.call(manualOffice93ByPeriod, periodKey)
   const manualOffice93 = hasManualOffice93 ? manualOffice93ByPeriod[periodKey] : EMPTY_ARRAY
+  const manualLockers = manualLockersByPeriod[periodKey] || EMPTY_ARRAY
   const manualDeskAssignments = manualDeskAssignmentsByPeriod[periodKey] || EMPTY_ARRAY
   const savedWeeks = savedWeeksByPeriod[periodKey] || EMPTY_ARRAY
 
@@ -322,6 +326,17 @@ export default function App() {
 
   const setManualDeskAssignmentsForPeriod = useCallback((updater) => {
     setManualDeskAssignmentsByPeriod((prev) => {
+      const current = prev[periodKey] || []
+      const next = typeof updater === 'function' ? updater(current) : updater
+      const copy = { ...prev }
+      if (next === undefined || next === null) delete copy[periodKey]
+      else copy[periodKey] = next
+      return copy
+    })
+  }, [periodKey])
+
+  const setManualLockersForPeriod = useCallback((updater) => {
+    setManualLockersByPeriod((prev) => {
       const current = prev[periodKey] || []
       const next = typeof updater === 'function' ? updater(current) : updater
       const copy = { ...prev }
@@ -396,6 +411,11 @@ export default function App() {
       effectiveParams,
       manualDeskAssignments
     )
+    const lockerResult = assignLockersForMonth({
+      employees: effectiveEmployeesView,
+      lockerCount: effectiveParams.lockers,
+      manualAssignments: manualLockers,
+    })
 
     const { summary, alerts: dailyAlerts } = buildDailySummary(
       effectiveSchedule,
@@ -422,12 +442,13 @@ export default function App() {
       parkingAssigned,
       parkingUsage,
       floatingResult,
+      lockerResult,
       summary,
       allAlerts,
       kpis,
       effectiveParams,
     }
-  }, [employees, holidays, absences, manualOverrides, month, year, params, manualParking, manualOffice93, hasManualOffice93, generationTick, isReadOnly, manualDeskAssignments])
+  }, [employees, holidays, absences, manualOverrides, month, year, params, manualParking, manualOffice93, hasManualOffice93, generationTick, isReadOnly, manualDeskAssignments, manualLockers])
 
   const saveOverride = useCallback((employeeId, date, status, reason) => {
     setManualOverrides((prev) => {
@@ -493,6 +514,9 @@ export default function App() {
     setManualOffice93ByPeriod((prev) => Object.fromEntries(
       Object.entries(prev).map(([key, ids]) => [key, ids.filter((id) => id !== employeeId)])
     ))
+    setManualLockersByPeriod((prev) => Object.fromEntries(
+      Object.entries(prev).map(([key, assignments]) => [key, assignments.filter((assignment) => assignment.employeeId !== employeeId)])
+    ))
     setManualDeskAssignmentsByPeriod((prev) => Object.fromEntries(
       Object.entries(prev).map(([key, assignments]) => [key, assignments.filter((assignment) => assignment.employeeId !== employeeId)])
     ))
@@ -501,6 +525,7 @@ export default function App() {
   const clearOverrides = () => {
     setManualOverrides([])
     setManualOffice93ForPeriod([])
+    setManualLockersForPeriod([])
     setManualDeskAssignmentsForPeriod([])
     setSavedWeeksByPeriod((prev) => ({ ...prev, [periodKey]: [] }))
   }
@@ -519,6 +544,7 @@ export default function App() {
     year,
     manualParking,
     manualOffice93ByPeriod,
+    manualLockersByPeriod,
     manualDeskAssignmentsByPeriod,
     savedWeeksByPeriod,
   })
@@ -528,7 +554,7 @@ export default function App() {
     if (snap.holidays) setHolidays(snap.holidays)
     if (snap.absences) setAbsences(snap.absences)
     if (snap.manualOverrides) setManualOverrides(snap.manualOverrides)
-    if (snap.params) setParams(snap.params)
+    if (snap.params) setParams({ ...defaultParameters, ...snap.params })
     const nextPeriod = normalizePeriod(
       typeof snap.year === 'number' ? snap.year : year,
       typeof snap.month === 'number' ? snap.month : month
@@ -537,6 +563,7 @@ export default function App() {
     setMonth(nextPeriod.month)
     if (snap.manualParking) setManualParking(snap.manualParking)
     if (snap.manualOffice93ByPeriod) setManualOffice93ByPeriod(snap.manualOffice93ByPeriod)
+    if (snap.manualLockersByPeriod) setManualLockersByPeriod(snap.manualLockersByPeriod)
     if (snap.manualDeskAssignmentsByPeriod) setManualDeskAssignmentsByPeriod(snap.manualDeskAssignmentsByPeriod)
     if (snap.savedWeeksByPeriod) setSavedWeeksByPeriod(snap.savedWeeksByPeriod)
     else if (snap.manualOffice93) {
@@ -579,6 +606,7 @@ export default function App() {
       year,
       manualParking,
       manualOffice93ByPeriod,
+      manualLockersByPeriod,
       manualDeskAssignmentsByPeriod,
       savedWeeksByPeriod,
     }
@@ -586,7 +614,7 @@ export default function App() {
     const next = JSON.stringify(state)
     if (previous && previous !== next) rememberBackup(previous)
     window.localStorage.setItem(STORAGE_KEY, next)
-  }, [employees, holidays, absences, manualOverrides, params, month, year, manualParking, manualOffice93ByPeriod, manualDeskAssignmentsByPeriod, savedWeeksByPeriod, isReadOnly])
+  }, [employees, holidays, absences, manualOverrides, params, month, year, manualParking, manualOffice93ByPeriod, manualLockersByPeriod, manualDeskAssignmentsByPeriod, savedWeeksByPeriod, isReadOnly])
 
   useEffect(() => {
     if (isReadOnly && !PUBLIC_VIEWS.includes(view)) setView('dashboard')
@@ -695,6 +723,17 @@ export default function App() {
               employees={employees}
               assigned={computed.office93Assigned}
               setManualOffice93={setManualOffice93ForPeriod}
+              params={params}
+              month={month}
+              year={year}
+            />
+          )}
+          {view === 'lockers' && (
+            <Lockers
+              employees={computed.effectiveEmployees}
+              lockerResult={computed.lockerResult}
+              manualLockers={manualLockers}
+              setManualLockers={setManualLockersForPeriod}
               params={params}
               month={month}
               year={year}

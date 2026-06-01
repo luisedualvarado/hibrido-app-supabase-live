@@ -35,6 +35,7 @@ const NAV = [
   ['absences', '✈', 'Vacaciones / Ausencias'],
   ['holidays', '★', 'Festivos'],
   ['office93', '93', 'Oficina 93'],
+  ['lockers', '▣', 'Lockers'],
   ['parking', '⊞', 'Parqueaderos'],
   ['overrides', '✎', 'Ajustes manuales'],
   ['settings', '⚙', 'Configuración'],
@@ -81,33 +82,44 @@ export function Sidebar({
       </nav>
       {readOnly && (
         <form className="admin-access" onSubmit={handleSubmit}>
-          <div className="admin-access-title">Acceso admin</div>
-          <label htmlFor="admin-username">Usuario</label>
-          <input
-            id="admin-username"
-            type="text"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            placeholder="admin"
-            autoComplete="username"
-          />
-          <label htmlFor="admin-password">Contrasena</label>
-          <input
-            id="admin-password"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="Ingresa la contrasena"
-            autoComplete="current-password"
-          />
+          <div className="admin-access-head">
+            <div className="admin-access-kicker">Admin</div>
+            <div className="admin-access-title">Acceso admin</div>
+            <div className="admin-access-copy">Desbloquea edicion, configuracion y paneles internos.</div>
+          </div>
+          <div className="admin-access-field">
+            <label htmlFor="admin-username">Usuario</label>
+            <input
+              id="admin-username"
+              type="text"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              placeholder="admin"
+              autoComplete="username"
+            />
+          </div>
+          <div className="admin-access-field">
+            <label htmlFor="admin-password">Contrasena</label>
+            <input
+              id="admin-password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Ingresa la contrasena"
+              autoComplete="current-password"
+            />
+          </div>
           {authError && <div className="admin-access-error">{authError}</div>}
-          <button type="submit" className="btn btn-primary btn-block">Entrar como admin</button>
+          <button type="submit" className="btn btn-primary btn-block admin-access-submit">Entrar como admin</button>
         </form>
       )}
       {!readOnly && isAdmin && (
         <div className="admin-access admin-access-active">
-          <div className="admin-access-title">Sesion admin activa</div>
-          <div className="admin-access-copy">Ya puedes abrir y editar todas las pestañas.</div>
+          <div className="admin-access-head">
+            <div className="admin-access-kicker">Admin</div>
+            <div className="admin-access-title">Sesion admin activa</div>
+            <div className="admin-access-copy">Ya puedes abrir y editar todas las pestañas.</div>
+          </div>
           <button type="button" className="btn btn-ghost btn-block" onClick={onAdminLogout}>Cerrar sesion</button>
         </div>
       )}

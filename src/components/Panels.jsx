@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { prettyDate, MONTH_LABEL } from '../logic/dateUtils.js'
 import { exportToCSV, exportToJSON, scheduleToRows, summaryToRows, alertsToRows } from '../logic/exporters.js'
+import { buildLockerCodes } from '../logic/lockerGenerator.js'
 
 const byName = (a, b) => a.name.localeCompare(b.name, 'es')
 
@@ -310,6 +311,176 @@ export function Office93Rotation({ employees, assigned, setManualOffice93, param
   )
 }
 
+/* ---------------- Lockers ---------------- */
+export function Lockers({ employees, lockerResult, manualLockers, setManualLockers, params, month, year }) {
+  const [search, setSearch] = useState('')
+  const [discipline, setDiscipline] = useState('ALL')
+  const eligibleEmployees = lockerResult?.eligibleEmployees || []
+  const assignmentByEmployee = lockerResult?.assignmentByEmployee || {}
+  const lockers = lockerResult?.lockers || []
+  const lockerCodes = useMemo(() => lockerResult?.lockerCodes || buildLockerCodes(params.lockers), [lockerResult?.lockerCodes, params.lockers])
+  const disciplines = useMemo(() => Array.from(new Set(eligibleEmployees.map((employee) => employee.discipline))).sort(), [eligibleEmployees])
+  const manualByEmployee = useMemo(
+    () => Object.fromEntries((manualLockers || []).map((assignment) => [assignment.employeeId, assignment])),
+    [manualLockers]
+  )
+  const occupancyByLocker = useMemo(
+    () => Object.fromEntries(lockers.map((locker) => [locker.lockerNumber, locker.occupants.map((occupant) => occupant.employeeId)])),
+    [lockers]
+  )
+  const filteredEmployees = useMemo(() => eligibleEmployees.filter((employee) => {
+    const text = `${employee.name} ${employee.email || ''} ${employee.discipline}`.toLowerCase()
+    if (search && !text.includes(search.toLowerCase())) return false
+    if (discipline !== 'ALL' && employee.discipline !== discipline) return false
+    return true
+  }).sort(byName), [discipline, eligibleEmployees, search])
+
+  const updateLocker = (employeeId, value) => {
+    setManualLockers((prev) => {
+      const current = Array.isArray(prev) ? prev : []
+      const withoutCurrent = current.filter((assignment) => assignment.employeeId !== employeeId)
+      const lockerNumber = String(value || '').trim()
+      if (!lockerNumber) return withoutCurrent
+      return [...withoutCurrent, { employeeId, lockerNumber }].sort((left, right) => left.employeeId.localeCompare(right.employeeId))
+    })
+  }
+
+  const clearManual = () => setManualLockers(undefined)
+  const occupiedLockers = lockers.filter((locker) => locker.occupants.length)
+
+  return (
+    <div>
+      <div className="kpi-grid" style={{ marginBottom: 18 }}>
+        <Kpi label="Mes" value={MONTH_LABEL[month]} hint={String(year)} />
+        <Kpi label="Lockers" value={params.lockers} />
+        <Kpi label="Personas WeWork" value={eligibleEmployees.length} />
+        <Kpi label="Lockers compartidos" value={lockerResult?.sharedLockerCount || 0} tone={(lockerResult?.sharedLockerCount || 0) > 0 ? 'amber' : 'green'} />
+        <Kpi label="Sin locker" value={lockerResult?.unassignedCount || 0} tone={(lockerResult?.unassignedCount || 0) > 0 ? 'red' : 'green'} />
+      </div>
+
+      <div className="grid2">
+        <div className="card">
+          <div className="card-head">
+            <h3>Asignacion mensual individual</h3>
+            <button className="btn btn-sm btn-ghost" onClick={clearManual}>Volver a automatico</button>
+          </div>
+          <div className="card-body">
+            <p className="muted" style={{ marginTop: 0, fontSize: 12 }}>
+              La base toma a todas las personas activas que quedan en WeWork este mes. Puedes fijar lockers manualmente por persona; cuando no alcanza, la app comparte un locker entre dos personas.
+            </p>
+            <div className="filters">
+              <div className="fg" style={{ minWidth: 220 }}>
+                <label>Buscar</label>
+                <input type="text" placeholder="Nombre, correo..." value={search} onChange={(e) => setSearch(e.target.value)} />
+              </div>
+              <div className="fg">
+                <label>Disciplina</label>
+                <select value={discipline} onChange={(e) => setDiscipline(e.target.value)}>
+                  <option value="ALL">Todas</option>
+                  {disciplines.map((item) => <option key={item} value={item}>{item}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Persona</th>
+                    <th>Disciplina</th>
+                    <th>Locker asignado</th>
+                    <th>Modo</th>
+                    <th>Editar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredEmployees.length === 0 && <tr><td colSpan={5} className="empty">No hay personas con esos filtros.</td></tr>}
+                  {filteredEmployees.map((employee) => {
+                    const assignment = assignmentByEmployee[employee.id]
+                    const manualAssignment = manualByEmployee[employee.id]
+                    return (
+                      <tr key={employee.id}>
+                        <td>{employee.name}</td>
+                        <td><span className="badge gray">{employee.discipline}</span></td>
+                        <td>
+                          {!assignment?.lockerNumber ? (
+                            <span className="badge red">Sin locker</span>
+                          ) : (
+                            <>
+                              <span className={`badge ${assignment.shared ? 'amber' : 'navy'}`}>Locker {assignment.lockerNumber}</span>
+                              {assignment.shared && <span className="badge amber" style={{ marginLeft: 6 }}>Compartido</span>}
+                            </>
+                          )}
+                        </td>
+                        <td>
+                          <span className={`badge ${manualAssignment ? 'green' : 'gray'}`}>{manualAssignment ? 'Manual' : 'Automatico'}</span>
+                        </td>
+                        <td>
+                          <select value={manualAssignment?.lockerNumber || ''} onChange={(e) => updateLocker(employee.id, e.target.value)}>
+                            <option value="">Automatico</option>
+                            {lockerCodes.map((lockerNumber) => {
+                              const occupants = occupancyByLocker[lockerNumber] || []
+                              const canUse = occupants.length < 2 || occupants.includes(employee.id)
+                              return (
+                                <option key={lockerNumber} value={lockerNumber} disabled={!canUse}>
+                                  Locker {lockerNumber}{occupants.length ? ` · ${occupants.length}/2` : ''}
+                                </option>
+                              )
+                            })}
+                          </select>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-head"><h3>Resumen mensual de lockers</h3></div>
+          <div className="card-body">
+            {occupiedLockers.length === 0 ? (
+              <div className="empty compact">Aun no hay lockers asignados.</div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                {occupiedLockers.map((locker) => (
+                  <div key={locker.lockerNumber} style={{ border: '1px solid var(--gray-200)', borderRadius: 10, padding: 12, background: locker.shared ? 'var(--amber-bg)' : 'var(--gray-50)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                      <strong>Locker {locker.lockerNumber}</strong>
+                      <span className={`badge ${locker.shared ? 'amber' : 'green'}`}>{locker.shared ? '2 personas' : '1 persona'}</span>
+                    </div>
+                    <div className="tag-list">
+                      {locker.occupants.map((occupant) => {
+                        const employee = eligibleEmployees.find((item) => item.id === occupant.employeeId)
+                        return <span key={occupant.employeeId} className={`badge ${occupant.manual ? 'green' : 'navy'}`}>{employee?.name || occupant.employeeId}</span>
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {lockerResult?.ignoredManualAssignments?.length > 0 && (
+              <div style={{ marginTop: 18 }}>
+                <div className="section-title">Asignaciones manuales ignoradas</div>
+                <div className="tag-list">
+                  {lockerResult.ignoredManualAssignments.map((assignment, index) => (
+                    <span key={`${assignment.employeeId}-${assignment.lockerNumber}-${index}`} className="badge red">
+                      {assignment.employeeId} · locker {assignment.lockerNumber}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ---------------- Manual overrides ---------------- */
 export function ManualOverrides({ employees, manualOverrides, onDelete }) {
   const byEmp = Object.fromEntries(employees.map((e) => [e.id, e]))
@@ -345,9 +516,10 @@ export function Settings({ params, setParams }) {
         <div className="grid2" style={{ gap: 16 }}>
           <Field label="Puestos WeWork" v={params.seatsWeWork} on={(v) => up('seatsWeWork', v)} />
           <Field label="Puestos Oficina 93" v={params.seats93} on={(v) => up('seats93', v)} />
+          <Field label="Lockers" v={params.lockers} on={(v) => up('lockers', v)} />
           <Field label="Parqueaderos" v={params.parkingSpots} on={(v) => up('parkingSpots', v)} />
         </div>
-        <p className="muted" style={{ fontSize: 12 }}>Días laborales: lunes a viernes. La validación busca que WeWork y Oficina 93 queden ocupadas sin sobrecupo.</p>
+        <p className="muted" style={{ fontSize: 12 }}>Días laborales: lunes a viernes. La validación busca que WeWork y Oficina 93 queden ocupadas sin sobrecupo. Los lockers se asignan por mes al personal que queda en WeWork.</p>
       </div>
     </div>
   )

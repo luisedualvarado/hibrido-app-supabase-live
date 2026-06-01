@@ -69,42 +69,112 @@ body {
 .nav .ic { font-size: 16px; width: 18px; text-align: center; }
 .admin-access {
   margin: 0 16px 16px;
-  padding: 14px;
-  border-radius: 12px;
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.1);
+  padding: 18px;
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.05)),
+    linear-gradient(135deg, rgba(29,78,137,.22), rgba(10,35,66,.12));
+  border: 1px solid rgba(255,255,255,.12);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 12px 28px rgba(3, 16, 33, .18);
   display: grid;
-  gap: 8px;
+  gap: 12px;
+  position: relative;
+  overflow: hidden;
+}
+.admin-access::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 88px;
+  background: radial-gradient(circle at top left, rgba(255,255,255,.16), transparent 62%);
+  pointer-events: none;
+}
+.admin-access-head {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 4px;
+}
+.admin-access-kicker {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.14);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: #bfd2ea;
 }
 .admin-access-title {
-  font-size: 12px;
+  font-family: var(--display);
+  font-size: 17px;
   font-weight: 800;
-  letter-spacing: .08em;
-  text-transform: uppercase;
+  letter-spacing: -.02em;
   color: #fff;
+}
+.admin-access-field {
+  position: relative;
+  z-index: 1;
 }
 .admin-access label {
   margin-bottom: 0;
   font-size: 11px;
-  color: #9fb6d3;
+  font-weight: 700;
+  letter-spacing: .03em;
+  color: #c3d2e5;
 }
 .admin-access input {
   width: 100%;
-  background: rgba(255,255,255,.95);
+  margin-top: 6px;
+  min-height: 48px;
+  padding: 11px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(244,247,251,.96));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.72);
+}
+.admin-access input:focus {
+  border-color: #7fb0e4;
+  box-shadow: 0 0 0 4px rgba(127,176,228,.16), inset 0 1px 0 rgba(255,255,255,.72);
 }
 .admin-access-copy {
   font-size: 12px;
-  line-height: 1.4;
-  color: #dce6f2;
+  line-height: 1.45;
+  color: #d6e3f1;
 }
 .admin-access-error {
-  color: #ffd3cd;
+  position: relative;
+  z-index: 1;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,211,205,.18);
+  background: rgba(192,57,43,.18);
+  color: #ffe3de;
   font-size: 12px;
   font-weight: 600;
 }
+.admin-access-submit {
+  position: relative;
+  z-index: 1;
+  min-height: 48px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 10px 22px rgba(5, 18, 38, .22);
+}
+.admin-access-submit:hover {
+  transform: translateY(-1px);
+}
 .admin-access-active {
-  background: rgba(31,157,99,.14);
-  border-color: rgba(31,157,99,.35);
+  background:
+    linear-gradient(180deg, rgba(31,157,99,.2), rgba(31,157,99,.1)),
+    linear-gradient(135deg, rgba(18,58,99,.2), rgba(10,35,66,.12));
+  border-color: rgba(92, 213, 151, .28);
 }
 .sidebar-foot { padding: 14px 18px; border-top: 1px solid rgba(255,255,255,.08); font-size: 11px; color: #6f8aae; }
 
