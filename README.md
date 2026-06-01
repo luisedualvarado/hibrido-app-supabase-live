@@ -32,7 +32,7 @@ credenciales:
 
 ```bash
 usuario: admin
-contrasena: admin123
+contrasena: ME&I2026
 ```
 
 Si vas a publicar el sitio, cambia esos valores en `.env.production`. Ten en
