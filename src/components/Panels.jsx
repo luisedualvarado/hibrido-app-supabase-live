@@ -348,6 +348,47 @@ export function Lockers({ employees, lockerResult, manualLockers, setManualLocke
   const clearManual = () => setManualLockers(undefined)
   const occupiedLockers = lockers.filter((locker) => locker.occupants.length)
 
+  const summaryCard = (
+    <div className="card">
+      <div className="card-head"><h3>Resumen mensual de lockers</h3></div>
+      <div className="card-body">
+        {occupiedLockers.length === 0 ? (
+          <div className="empty compact">Aun no hay lockers asignados.</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+            {occupiedLockers.map((locker) => (
+              <div key={locker.lockerNumber} style={{ border: '1px solid var(--gray-200)', borderRadius: 10, padding: 12, background: locker.shared ? 'var(--amber-bg)' : 'var(--gray-50)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                  <strong>Locker {locker.lockerNumber}</strong>
+                  <span className={`badge ${locker.shared ? 'amber' : 'green'}`}>{locker.shared ? '2 personas' : '1 persona'}</span>
+                </div>
+                <div className="tag-list">
+                  {locker.occupants.map((occupant) => {
+                    const employee = eligibleEmployees.find((item) => item.id === occupant.employeeId)
+                    return <span key={occupant.employeeId} className={`badge ${occupant.manual ? 'green' : 'navy'}`}>{employee?.name || occupant.employeeId}</span>
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {lockerResult?.ignoredManualAssignments?.length > 0 && (
+          <div style={{ marginTop: 18 }}>
+            <div className="section-title">Asignaciones manuales ignoradas</div>
+            <div className="tag-list">
+              {lockerResult.ignoredManualAssignments.map((assignment, index) => (
+                <span key={`${assignment.employeeId}-${assignment.lockerNumber}-${index}`} className="badge red">
+                  {assignment.employeeId} · locker {assignment.lockerNumber}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+
   return (
     <div>
       {!readOnly && (
@@ -440,74 +481,13 @@ export function Lockers({ employees, lockerResult, manualLockers, setManualLocke
               </div>
             </div>
 
-            <div className="card">
-              <div className="card-head"><h3>Resumen mensual de lockers</h3></div>
-              <div className="card-body">
-                {occupiedLockers.length === 0 ? (
-                  <div className="empty compact">Aun no hay lockers asignados.</div>
-                ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-                    {occupiedLockers.map((locker) => (
-                      <div key={locker.lockerNumber} style={{ border: '1px solid var(--gray-200)', borderRadius: 10, padding: 12, background: locker.shared ? 'var(--amber-bg)' : 'var(--gray-50)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                          <strong>Locker {locker.lockerNumber}</strong>
-                          <span className={`badge ${locker.shared ? 'amber' : 'green'}`}>{locker.shared ? '2 personas' : '1 persona'}</span>
-                        </div>
-                        <div className="tag-list">
-                          {locker.occupants.map((occupant) => {
-                            const employee = eligibleEmployees.find((item) => item.id === occupant.employeeId)
-                            return <span key={occupant.employeeId} className={`badge ${occupant.manual ? 'green' : 'navy'}`}>{employee?.name || occupant.employeeId}</span>
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {lockerResult?.ignoredManualAssignments?.length > 0 && (
-                  <div style={{ marginTop: 18 }}>
-                    <div className="section-title">Asignaciones manuales ignoradas</div>
-                    <div className="tag-list">
-                      {lockerResult.ignoredManualAssignments.map((assignment, index) => (
-                        <span key={`${assignment.employeeId}-${assignment.lockerNumber}-${index}`} className="badge red">
-                          {assignment.employeeId} · locker {assignment.lockerNumber}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+            {summaryCard}
           </div>
         </>
       )}
 
       {readOnly && (
-        <div className="card">
-          <div className="card-head"><h3>Resumen mensual de lockers</h3></div>
-          <div className="card-body">
-            {occupiedLockers.length === 0 ? (
-              <div className="empty compact">Aun no hay lockers asignados.</div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-                {occupiedLockers.map((locker) => (
-                  <div key={locker.lockerNumber} style={{ border: '1px solid var(--gray-200)', borderRadius: 10, padding: 12, background: locker.shared ? 'var(--amber-bg)' : 'var(--gray-50)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                      <strong>Locker {locker.lockerNumber}</strong>
-                      <span className={`badge ${locker.shared ? 'amber' : 'green'}`}>{locker.shared ? '2 personas' : '1 persona'}</span>
-                    </div>
-                    <div className="tag-list">
-                      {locker.occupants.map((occupant) => {
-                        const employee = eligibleEmployees.find((item) => item.id === occupant.employeeId)
-                        return <span key={occupant.employeeId} className={`badge ${occupant.manual ? 'green' : 'navy'}`}>{employee?.name || occupant.employeeId}</span>
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        summaryCard
       )}
     </div>
   )
