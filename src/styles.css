@@ -360,6 +360,36 @@ tr:hover td { background: var(--gray-50); }
 }
 
 /* Schedule matrix */
+.week-save-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.week-save-card {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+  display: grid;
+  gap: 10px;
+}
+.week-save-card.saved {
+  border-color: rgba(31,157,99,.35);
+  background: linear-gradient(180deg, #ffffff 0%, #f6fcf8 100%);
+}
+.week-save-card strong {
+  display: block;
+  font-size: 14px;
+  color: var(--navy);
+}
+.week-save-card span,
+.week-save-card small {
+  display: block;
+  color: var(--gray-500);
+  margin-top: 3px;
+}
 .matrix-wrap { overflow:auto; border:1px solid var(--gray-200); border-radius: var(--radius); background:#fff; max-height: 70vh; }
 .matrix { border-collapse: collapse; font-size: 11.5px; }
 .matrix th, .matrix td { border: 1px solid var(--gray-100); padding: 0; }

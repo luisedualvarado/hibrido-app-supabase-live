@@ -59,6 +59,7 @@ export default function People({ employees, setEmployees, onDeleteEmployee }) {
   const [sort, setSort] = useState({ key: 'name', direction: 'asc' })
   const [columnFilters, setColumnFilters] = useState({
     name: '',
+    baseSeat: '',
     discipline: 'ALL',
     location: 'ALL',
     active: 'ALL',
@@ -89,6 +90,7 @@ export default function People({ employees, setEmployees, onDeleteEmployee }) {
   }
   const sortValue = (employee, key) => {
     if (key === 'location') return LOCATION_LABELS[employee.baseLocation] || employee.baseLocation
+    if (key === 'baseSeat') return employee.baseSeat || ''
     if (key === 'active') return employee.isActive ? 1 : 0
     if (key === 'hybrid') return employee.hybridApproved ? 1 : 0
     if (key === 'floating') return employee.isFloating ? 1 : 0
@@ -123,6 +125,7 @@ export default function People({ employees, setEmployees, onDeleteEmployee }) {
     if (flag === 'CAR' && !e.hasCar) return false
     if (flag === 'PARKING' && !e.parkingEligible) return false
     if (columnFilters.name && !e.name.toLowerCase().includes(columnFilters.name.toLowerCase())) return false
+    if (columnFilters.baseSeat && !String(e.baseSeat || '').toLowerCase().includes(columnFilters.baseSeat.toLowerCase())) return false
     if (columnFilters.discipline !== 'ALL' && e.discipline !== columnFilters.discipline) return false
     if (columnFilters.location !== 'ALL' && e.baseLocation !== columnFilters.location) return false
     if (!matchesYesNo(e.isActive, columnFilters.active)) return false
@@ -171,6 +174,7 @@ export default function People({ employees, setEmployees, onDeleteEmployee }) {
     setFlag('ALL')
     setColumnFilters({
       name: '',
+      baseSeat: '',
       discipline: 'ALL',
       location: 'ALL',
       active: 'ALL',
@@ -262,6 +266,7 @@ export default function People({ employees, setEmployees, onDeleteEmployee }) {
           <thead>
             <tr>
               <th><button className="th-btn" onClick={() => toggleSort('name')}>Nombre{sortMark('name')}</button></th>
+              <th><button className="th-btn" onClick={() => toggleSort('baseSeat')}>Puesto{sortMark('baseSeat')}</button></th>
               <th><button className="th-btn" onClick={() => toggleSort('discipline')}>Disciplina{sortMark('discipline')}</button></th>
               <th><button className="th-btn" onClick={() => toggleSort('location')}>Ubicacion{sortMark('location')}</button></th>
               <th>Condicion</th>
@@ -276,6 +281,7 @@ export default function People({ employees, setEmployees, onDeleteEmployee }) {
             </tr>
             <tr className="column-filter-row">
               <th><input className="col-filter" type="text" value={columnFilters.name} onChange={(e) => updateColumnFilter('name', e.target.value)} placeholder="Filtrar" /></th>
+              <th><input className="col-filter" type="text" value={columnFilters.baseSeat} onChange={(e) => updateColumnFilter('baseSeat', e.target.value)} placeholder="Puesto" /></th>
               <th>
                 <select className="col-filter" value={columnFilters.discipline} onChange={(e) => updateColumnFilter('discipline', e.target.value)}>
                   <option value="ALL">Todas</option>
@@ -305,6 +311,7 @@ export default function People({ employees, setEmployees, onDeleteEmployee }) {
             {filtered.map((e) => (
               <tr key={e.id}>
                 <td>{e.name}</td>
+                <td>{e.baseSeat || '-'}</td>
                 <td><span className="badge gray">{e.discipline}</span></td>
                 <td>{LOCATION_LABELS[e.baseLocation] || e.baseLocation}</td>
                 <td>
@@ -323,7 +330,7 @@ export default function People({ employees, setEmployees, onDeleteEmployee }) {
                 <td><button className="btn btn-sm btn-danger" onClick={() => remove(e)}>Eliminar</button></td>
               </tr>
             ))}
-            {filtered.length === 0 && <tr><td colSpan={13} className="empty">No hay personas con esos filtros.</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={14} className="empty">No hay personas con esos filtros.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -383,7 +390,7 @@ function EmployeeModal({ emp, onClose, onSave }) {
                 <option value="REMOTO">Remoto</option>
               </select>
             </div>
-            <div className="field"><label>Puesto base</label><input type="text" style={{ width: '100%' }} value={f.baseSeat} onChange={(e) => up('baseSeat', e.target.value)} /></div>
+            <div className="field"><label>Numero de puesto</label><input type="text" style={{ width: '100%' }} value={f.baseSeat} onChange={(e) => up('baseSeat', e.target.value)} placeholder="Ej. 49" /></div>
             <div className="field"><label>Condicion / restriccion</label>
               <select style={{ width: '100%' }} value={f.restrictionType || 'NONE'} onChange={(e) => up('restrictionType', e.target.value)}>
                 {RESTRICTION_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}

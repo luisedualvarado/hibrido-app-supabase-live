@@ -27,7 +27,18 @@ function cellClass(cell, employee) {
   return employee.baseLocation === 'OFICINA_93' ? 'OFFICE O93' : 'OFFICE WEWORK'
 }
 
-export default function MonthlySchedule({ schedule, employees, onSaveOverride, onDeleteOverride, manualOverrides, readOnly = false, hideAlerts = false }) {
+export default function MonthlySchedule({
+  schedule,
+  employees,
+  onSaveOverride,
+  onDeleteOverride,
+  manualOverrides,
+  onSaveWeek,
+  onClearWeek,
+  savedWeeks = [],
+  readOnly = false,
+  hideAlerts = false,
+}) {
   const [search, setSearch] = useState('')
   const [loc, setLoc] = useState('ALL')
   const [disc, setDisc] = useState('ALL')
@@ -57,9 +68,33 @@ export default function MonthlySchedule({ schedule, employees, onSaveOverride, o
 
   const overrideFor = (empId, iso) =>
     manualOverrides.find((o) => o.employeeId === empId && o.date === iso)
+  const savedWeeksMap = new Map(savedWeeks.map((entry) => [entry.weekId, entry]))
 
   return (
     <div>
+      {!readOnly && schedule.weeks?.length > 0 && (
+        <div className="week-save-panel">
+          {schedule.weeks.map((week, index) => {
+            const savedWeek = savedWeeksMap.get(week.weekId)
+            const startDate = week.workdays[0]
+            const endDate = week.workdays[week.workdays.length - 1]
+            return (
+              <div key={week.weekId} className={`week-save-card ${savedWeek ? 'saved' : ''}`}>
+                <div>
+                  <strong>Semana {index + 1}</strong>
+                  <span>{prettyDate(startDate)} a {prettyDate(endDate)}</span>
+                  <small>{savedWeek ? `Guardada ${new Date(savedWeek.savedAt).toLocaleString('es-CO')}` : 'Sin guardar todavia'}</small>
+                </div>
+                <div className="row" style={{ gap: 8 }}>
+                  <button className="btn btn-sm btn-primary" onClick={() => onSaveWeek(week)}>Guardar semana</button>
+                  {savedWeek && <button className="btn btn-sm btn-ghost" onClick={() => onClearWeek(week)}>Liberar semana</button>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
       <div className="filters">
         <div className="fg" style={{ minWidth: 200 }}>
           <label>Buscar persona</label>
@@ -109,6 +144,7 @@ export default function MonthlySchedule({ schedule, employees, onSaveOverride, o
               <tr key={e.id}>
                 <td className="name-col">
                   {e.name}
+                  {e.baseSeat && <span className="badge gray" style={{ marginLeft: 6, fontSize: 9 }}>Puesto {e.baseSeat}</span>}
                   {e.isFloating && <span className="badge navy" style={{ marginLeft: 6, fontSize: 9 }}>FLOT</span>}
                   {e.doubleHomeConsecutive && <span className="badge green" style={{ marginLeft: 6, fontSize: 9 }}>2TC</span>}
                 </td>
@@ -138,6 +174,7 @@ export default function MonthlySchedule({ schedule, employees, onSaveOverride, o
       </div>
 
       <div className="legend">
+        {!hideAlerts && <span><span className="lg-chip" style={{ background: 'var(--green-bg)', border: '1px solid var(--green)' }} /> Guardar semana · fija esos dias como ajustes persistentes</span>}
         <span><span className="lg-chip" style={{ background: 'var(--blue-100)' }} /> TC · Trabajo en casa</span>
         <span><span className="lg-chip" style={{ background: '#fff' }} /> WW · Oficina WeWork</span>
         <span><span className="lg-chip" style={{ background: 'var(--green-bg)' }} /> 93 · Oficina 93</span>

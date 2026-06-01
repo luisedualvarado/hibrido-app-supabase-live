@@ -139,6 +139,7 @@ function ListCard({ title, people, tone }) {
             {people.map((person) => (
               <span key={person.id} className={`badge ${tone}`}>
                 {person.name}
+                {person.baseSeat && <small className="badge-suffix">Puesto {person.baseSeat}</small>}
                 {person.dailySource === 'MANUAL' && <small className="badge-suffix">Manual</small>}
               </span>
             ))}

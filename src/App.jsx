@@ -85,6 +85,16 @@ const ADMIN_SESSION_KEY = 'hibrido-app-admin-session'
 const ADMIN_USERNAME = import.meta.env.VITE_ADMIN_USERNAME || 'admin'
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123'
 
+function buildSavedWeekEntry(week) {
+  return {
+    weekId: week.weekId,
+    startDate: week.workdays[0] || null,
+    endDate: week.workdays[week.workdays.length - 1] || null,
+    workdays: week.workdays,
+    savedAt: new Date().toISOString(),
+  }
+}
+
 function normalizePeriod(year, month) {
   const safeYear = Number.isFinite(year) ? year : MIN_YEAR
   const safeMonth = Number.isFinite(month) ? month : MIN_MONTH
@@ -222,10 +232,13 @@ export default function App() {
   const [year, setYear] = useState(initialPeriod.year)
   const [manualParking, setManualParking] = useState(editableStored.manualParking || [])
   const [manualOffice93ByPeriod, setManualOffice93ByPeriod] = useState(editableStored.manualOffice93ByPeriod || {})
+  const [savedWeeksByPeriod, setSavedWeeksByPeriod] = useState(editableStored.savedWeeksByPeriod || {})
+  const [didHydrateStoredState, setDidHydrateStoredState] = useState(false)
   const [generationTick, setGenerationTick] = useState(0)
   const periodKey = periodKeyFor(year, month)
   const hasManualOffice93 = Object.prototype.hasOwnProperty.call(manualOffice93ByPeriod, periodKey)
   const manualOffice93 = hasManualOffice93 ? manualOffice93ByPeriod[periodKey] : EMPTY_ARRAY
+  const savedWeeks = savedWeeksByPeriod[periodKey] || EMPTY_ARRAY
 
   const setSafeView = useCallback((nextView) => {
     setView(isReadOnly && !PUBLIC_VIEWS.includes(nextView) ? 'dashboard' : nextView)
@@ -376,6 +389,51 @@ export default function App() {
     setManualOverrides((prev) => prev.filter((o) => !(o.employeeId === employeeId && o.date === date)))
   }, [])
 
+  const saveWeek = useCallback((week) => {
+    const operationalStatuses = new Set(['HOME', 'OFFICE', 'VACATION', 'ABSENCE'])
+    const weekDates = new Set(week.workdays)
+
+    setManualOverrides((prev) => {
+      const preserved = prev.filter((override) => !weekDates.has(override.date))
+      const weekOverrides = []
+
+      computed.effectiveEmployees.forEach((employee) => {
+        week.workdays.forEach((iso) => {
+          const cell = computed.schedule.cells[`${employee.id}__${iso}`]
+          if (!cell || !operationalStatuses.has(cell.status)) return
+          const existing = prev.find((override) => override.employeeId === employee.id && override.date === iso)
+          weekOverrides.push({
+            id: `${employee.id}-${iso}`,
+            employeeId: employee.id,
+            date: iso,
+            status: cell.status,
+            reason: existing?.reason || `Semana ${week.weekId} guardada`,
+            createdAt: existing?.createdAt || new Date().toISOString(),
+          })
+        })
+      })
+
+      return [...preserved, ...weekOverrides]
+    })
+
+    setSavedWeeksByPeriod((prev) => {
+      const current = prev[periodKey] || []
+      return {
+        ...prev,
+        [periodKey]: [...current.filter((entry) => entry.weekId !== week.weekId), buildSavedWeekEntry(week)],
+      }
+    })
+  }, [computed.effectiveEmployees, computed.schedule, periodKey])
+
+  const clearWeek = useCallback((week) => {
+    const weekDates = new Set(week.workdays)
+    setManualOverrides((prev) => prev.filter((override) => !weekDates.has(override.date)))
+    setSavedWeeksByPeriod((prev) => ({
+      ...prev,
+      [periodKey]: (prev[periodKey] || []).filter((entry) => entry.weekId !== week.weekId),
+    }))
+  }, [periodKey])
+
   const deleteEmployee = useCallback((employeeId) => {
     setEmployees((prev) => prev.filter((employee) => employee.id !== employeeId))
     setAbsences((prev) => prev.filter((absence) => absence.employeeId !== employeeId))
@@ -389,6 +447,7 @@ export default function App() {
   const clearOverrides = () => {
     setManualOverrides([])
     setManualOffice93ForPeriod([])
+    setSavedWeeksByPeriod((prev) => ({ ...prev, [periodKey]: [] }))
   }
   const regenerate = () => {
     setGenerationTick((tick) => tick + 1)
@@ -405,6 +464,7 @@ export default function App() {
     year,
     manualParking,
     manualOffice93ByPeriod,
+    savedWeeksByPeriod,
   })
 
   const importSnapshot = (snap) => {
@@ -421,6 +481,7 @@ export default function App() {
     setMonth(nextPeriod.month)
     if (snap.manualParking) setManualParking(snap.manualParking)
     if (snap.manualOffice93ByPeriod) setManualOffice93ByPeriod(snap.manualOffice93ByPeriod)
+    if (snap.savedWeeksByPeriod) setSavedWeeksByPeriod(snap.savedWeeksByPeriod)
     else if (snap.manualOffice93) {
       const importedKey = periodKeyFor(nextPeriod.year, nextPeriod.month)
       setManualOffice93ByPeriod({ [importedKey]: snap.manualOffice93 })
@@ -439,6 +500,16 @@ export default function App() {
   }
 
   useEffect(() => {
+    if (!PUBLIC_READ_ONLY || !isAdmin || didHydrateStoredState) return
+    if (!stored.employees?.length) {
+      setDidHydrateStoredState(true)
+      return
+    }
+    importSnapshot(stored)
+    setDidHydrateStoredState(true)
+  }, [didHydrateStoredState, isAdmin, stored])
+
+  useEffect(() => {
     if (isReadOnly) return
     const state = {
       version: 2,
@@ -451,12 +522,13 @@ export default function App() {
       year,
       manualParking,
       manualOffice93ByPeriod,
+      savedWeeksByPeriod,
     }
     const previous = window.localStorage.getItem(STORAGE_KEY)
     const next = JSON.stringify(state)
     if (previous && previous !== next) rememberBackup(previous)
     window.localStorage.setItem(STORAGE_KEY, next)
-  }, [employees, holidays, absences, manualOverrides, params, month, year, manualParking, manualOffice93ByPeriod, isReadOnly])
+  }, [employees, holidays, absences, manualOverrides, params, month, year, manualParking, manualOffice93ByPeriod, savedWeeksByPeriod, isReadOnly])
 
   useEffect(() => {
     if (isReadOnly && !PUBLIC_VIEWS.includes(view)) setView('dashboard')
@@ -526,6 +598,9 @@ export default function App() {
               onSaveOverride={saveOverride}
               onDeleteOverride={deleteOverride}
               manualOverrides={manualOverrides}
+              onSaveWeek={saveWeek}
+              onClearWeek={clearWeek}
+              savedWeeks={savedWeeks}
               readOnly={isReadOnly}
               hideAlerts={isReadOnly}
             />
