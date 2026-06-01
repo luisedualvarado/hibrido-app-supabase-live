@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { MONTH_LABEL, WEEKDAY_LABEL, prettyDate, weekdayKey } from '../logic/dateUtils.js'
-import { PHYSICAL_SEATS_BY_LOCATION } from '../logic/deskLayouts.js'
+import { isWeekend, WEEKDAY_LABEL, weekdayKey, dayOfMonth } from '../logic/dateUtils.js'
 
 const LOCATIONS = [
   ['WEWORK', 'WeWork'],
@@ -141,109 +140,75 @@ function deskCellClassName(cell) {
 
 export default function FloatingSeats({ schedule, employees, floatingResult, month, year }) {
   const [search, setSearch] = useState('')
+  const [loc, setLoc] = useState('ALL')
   const employeesById = useMemo(() => Object.fromEntries(employees.map((employee) => [employee.id, employee])), [employees])
   const deskPreset = month === 5 && year === 2026 ? JUNE_2026_DESK_PRESET : null
 
-  const floatersByLocation = useMemo(() => {
-    const floaters = deskPreset
-      ? []
-      : employees.filter((employee) => employee.isFloating && employee.isActive).sort(byName)
+  const filtered = useMemo(() => {
+    const baseEmployees = deskPreset
+      ? LOCATIONS.flatMap(([location]) => (deskPreset[location] || []).map((employeeId) => employeesById[employeeId]).filter(Boolean))
+      : employees.filter((employee) => employee.isFloating && employee.isActive)
 
-    return Object.fromEntries(LOCATIONS.map(([location]) => [
-      location,
-      deskPreset
-        ? (deskPreset[location] || [])
-          .map((employeeId) => employeesById[employeeId])
-          .filter(Boolean)
-          .filter((employee) => !search || employee.name.toLowerCase().includes(search.toLowerCase()))
-        : floaters
-          .filter((employee) => employee.baseLocation === location)
-          .filter((employee) => !search || employee.name.toLowerCase().includes(search.toLowerCase())),
-    ]))
-  }, [deskPreset, employees, employeesById, search])
+    return baseEmployees
+      .filter((employee) => !search || employee.name.toLowerCase().includes(search.toLowerCase()))
+      .filter((employee) => loc === 'ALL' || employee.baseLocation === loc)
+      .sort(byName)
+  }, [deskPreset, employees, employeesById, loc, search])
 
   if (!schedule?.days?.length) return <div className="empty">No hay dias disponibles para mostrar puestos.</div>
 
   return (
     <div>
       <div className="filters">
-        <div className="fg" style={{ minWidth: 220 }}>
+        <div className="fg" style={{ minWidth: 200 }}>
           <label>Buscar persona</label>
           <input type="text" placeholder="Nombre..." value={search} onChange={(event) => setSearch(event.target.value)} />
         </div>
-      </div>
-
-      <div className="kpi-grid" style={{ marginBottom: 18 }}>
-        <div className="kpi">
-          <div className="label">Mes</div>
-          <div className="value">{MONTH_LABEL[month]}</div>
-          <div className="hint">{year}</div>
-        </div>
-        <div className="kpi green">
-          <div className="label">Dias del mes</div>
-          <div className="value">{schedule.days.length}</div>
-          <div className="hint">incluye fines de semana y festivos</div>
-        </div>
-        <div className="kpi navy">
-          <div className="label">Flotantes visibles</div>
-          <div className="value">{floatersByLocation.WEWORK.length + floatersByLocation.OFICINA_93.length}</div>
-          <div className="hint">WeWork y 93</div>
+        <div className="fg">
+          <label>Ubicación</label>
+          <select value={loc} onChange={(event) => setLoc(event.target.value)}>
+            <option value="ALL">Todas</option>
+            <option value="WEWORK">WeWork</option>
+            <option value="OFICINA_93">Oficina 93</option>
+          </select>
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-head"><h3>Asignacion mensual de puestos flotantes</h3></div>
-        <div className="card-body">
-          <div className="matrix-wrap">
-            <table className="matrix desk-matrix">
-              <thead>
-                <tr>
-                  <th className="name-col">Persona</th>
-                  {schedule.days.map((iso) => (
-                    <th key={`month-head-${iso}`} className="dh">
-                      <div className="wd">{WEEKDAY_LABEL[weekdayKey(iso)].slice(0, 2)}</div>
-                      <div className="dn">{prettyDate(iso).split(' ')[0]}</div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {LOCATIONS.map(([location, label]) => {
-                  const floaters = floatersByLocation[location] || []
+      <div className="matrix-wrap">
+        <table className="matrix desk-matrix">
+          <thead>
+            <tr>
+              <th className="name-col">Persona ({filtered.length})</th>
+              {schedule.days.map((iso) => (
+                <th key={iso} className={`dh ${isWeekend(iso) ? 'weekend' : ''}`}>
+                  <div className="wd">{WEEKDAY_LABEL[weekdayKey(iso)].slice(0, 2)}</div>
+                  <div className="dn">{dayOfMonth(iso)}</div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((employee) => (
+              <tr key={employee.id}>
+                <td className="name-col">
+                  {employee.name}
+                  <span className={`badge ${employee.baseLocation === 'OFICINA_93' ? 'green' : 'navy'}`} style={{ marginLeft: 6, fontSize: 9 }}>
+                    {employee.baseLocation === 'OFICINA_93' ? '93' : 'WW'}
+                  </span>
+                  <span className="badge navy" style={{ marginLeft: 6, fontSize: 9 }}>FLOT</span>
+                </td>
+                {schedule.days.map((iso) => {
+                  const cell = resolveDeskCell(employee, iso, schedule, floatingResult, employee.baseLocation, deskPreset?.labels)
                   return (
-                    <React.Fragment key={`week-${location}`}>
-                      <tr className="desk-matrix-section-row">
-                        <td className="name-col desk-matrix-section-name">{label}</td>
-                        {schedule.days.map((iso) => (
-                          <td key={`section-${location}-${iso}`} className="daycell desk-matrix-section-fill" />
-                        ))}
-                      </tr>
-                      {floaters.length === 0 && (
-                        <tr>
-                          <td className="name-col empty">Sin flotantes</td>
-                          {schedule.days.map((iso) => <td key={`empty-${location}-${iso}`} className="daycell"><div className="cell NOT_APPLICABLE readOnly">-</div></td>)}
-                        </tr>
-                      )}
-                      {floaters.map((employee) => (
-                        <tr key={`${location}-${employee.id}`}>
-                          <td className="name-col desk-week-person">{employee.name}</td>
-                          {schedule.days.map((iso) => {
-                            const cell = resolveDeskCell(employee, iso, schedule, floatingResult, location, deskPreset?.labels)
-                            return (
-                              <td key={`${employee.id}-${iso}`} className="daycell">
-                                <div className={deskCellClassName(cell)}>{cell.label}</div>
-                              </td>
-                            )
-                          })}
-                        </tr>
-                      ))}
-                    </React.Fragment>
+                    <td key={`${employee.id}-${iso}`} className="daycell">
+                      <div className={deskCellClassName(cell)}>{cell.label}</div>
+                    </td>
                   )
                 })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )
