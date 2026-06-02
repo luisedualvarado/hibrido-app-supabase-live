@@ -61,6 +61,54 @@ const PUBLIC_JUNE_OFFICE93_IDS = [
 const PUBLIC_JUNE_PARAMS_OVERRIDE = {
   seats93: 11,
 }
+const PUBLIC_JUNE_LOCKER_ASSIGNMENTS = [
+  { employeeId: 'archila-karen', lockerNumber: '001' },
+  { employeeId: 'rojas-camilo', lockerNumber: '001' },
+  { employeeId: 'artunduaga-angelica', lockerNumber: '002' },
+  { employeeId: 'bejarano-fernando', lockerNumber: '003' },
+  { employeeId: 'vanegas-kaory', lockerNumber: '003' },
+  { employeeId: 'castaneda-kevin', lockerNumber: '004' },
+  { employeeId: 'bello-astrid', lockerNumber: '005' },
+  { employeeId: 'cardenas-andres-felipe', lockerNumber: '005' },
+  { employeeId: 'arenas-juan', lockerNumber: '006' },
+  { employeeId: 'vera-steven', lockerNumber: '006' },
+  { employeeId: 'contreras-julian', lockerNumber: '007' },
+  { employeeId: 'daza-santiago', lockerNumber: '008' },
+  { employeeId: 'desalvador-diego', lockerNumber: '009' },
+  { employeeId: 'escobar-andrea', lockerNumber: '010' },
+  { employeeId: 'escobar-andres', lockerNumber: '011' },
+  { employeeId: 'achury-ashly', lockerNumber: '012' },
+  { employeeId: 'barboza-liset', lockerNumber: '012' },
+  { employeeId: 'dulce-camilo', lockerNumber: '013' },
+  { employeeId: 'gallo-ana-maria', lockerNumber: '013' },
+  { employeeId: 'velosa-over', lockerNumber: '014' },
+  { employeeId: 'fuentes-andres', lockerNumber: '015' },
+  { employeeId: 'giraldo-nelson', lockerNumber: '016' },
+  { employeeId: 'gonzalez-julian', lockerNumber: '017' },
+  { employeeId: 'garcia-gabriel', lockerNumber: '018' },
+  { employeeId: 'quiroz-millan-juan', lockerNumber: '018' },
+  { employeeId: 'gonzalez-luis', lockerNumber: '100' },
+  { employeeId: 'almeida-daniel', lockerNumber: '101' },
+  { employeeId: 'alvarado-luis', lockerNumber: '102' },
+  { employeeId: 'bohorquez-samuel', lockerNumber: '102' },
+  { employeeId: 'guevara-luis', lockerNumber: '103' },
+  { employeeId: 'guevara-marylin', lockerNumber: '104' },
+  { employeeId: 'jimenez-johana', lockerNumber: '105' },
+  { employeeId: 'lancheros-rafael', lockerNumber: '106' },
+  { employeeId: 'latorre-juan-camilo', lockerNumber: '107' },
+  { employeeId: 'morales-jonathan', lockerNumber: '107' },
+  { employeeId: 'molina-jessica', lockerNumber: '108' },
+  { employeeId: 'morales-fabio', lockerNumber: '109' },
+  { employeeId: 'nino-samuel', lockerNumber: '110' },
+  { employeeId: 'ochoa-rafael', lockerNumber: '111' },
+  { employeeId: 'perez-leidy', lockerNumber: '112' },
+  { employeeId: 'pinto-juan-felipe', lockerNumber: '113' },
+  { employeeId: 'rodriguez-sofia', lockerNumber: '114' },
+  { employeeId: 'salinas-nelson', lockerNumber: '115' },
+  { employeeId: 'tibocha-jhonattan', lockerNumber: '116' },
+  { employeeId: 'reyes-oscar', lockerNumber: '117' },
+  { employeeId: 'teheran-gabriel', lockerNumber: '117' },
+]
 const PUBLIC_JUNE_EMPLOYEE_OVERRIDES = {
   'tarazona-elkin': { hybridApproved: false },
   'cortes-german': { hybridApproved: false, isFloating: true },
@@ -419,10 +467,13 @@ export default function App() {
       effectiveParams,
       manualDeskAssignments
     )
+    const effectiveManualLockers = isPublishedJune && isReadOnly
+      ? PUBLIC_JUNE_LOCKER_ASSIGNMENTS
+      : manualLockers
     const lockerResult = assignLockersForMonth({
       employees: effectiveEmployeesView,
       lockerCount: effectiveParams.lockers,
-      manualAssignments: manualLockers,
+      manualAssignments: effectiveManualLockers,
     })
 
     const { summary, alerts: dailyAlerts } = buildDailySummary(
