@@ -146,11 +146,19 @@ export default function People({ employees, setEmployees, onDeleteEmployee }) {
   })
 
   const save = (emp) => {
-    if (emp.id) setEmployees((prev) => prev.map((e) => (e.id === emp.id ? emp : e)))
+    if (emp.id) {
+      setEmployees((prev) => prev.map((employee) => {
+        if (employee.id !== emp.id) return employee
+        return {
+          ...emp,
+          nameOverride: emp.name !== employee.name ? true : employee.nameOverride,
+        }
+      }))
+    }
     else {
       const id = (emp.name || 'persona').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         .replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + Date.now().toString(36)
-      setEmployees((prev) => [...prev, { ...emp, id }])
+      setEmployees((prev) => [...prev, { ...emp, id, nameOverride: true }])
     }
     setEditing(null)
   }

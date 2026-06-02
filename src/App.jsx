@@ -111,8 +111,21 @@ function filterScheduleOverrides(overrides) {
 function mergeEmployeeSeatDefaults(employeeList) {
   return employeeList.map((employee) => {
     const initialEmployee = INITIAL_EMPLOYEES_BY_ID[employee.id]
-    if (!initialEmployee?.baseSeat || employee.baseSeat) return employee
-    return { ...employee, baseSeat: initialEmployee.baseSeat }
+    if (!initialEmployee) return employee
+
+    let nextEmployee = employee
+
+    if (initialEmployee.baseSeat && !employee.baseSeat) {
+      nextEmployee = { ...nextEmployee, baseSeat: initialEmployee.baseSeat }
+    }
+
+    if (employee.nameOverride !== true && initialEmployee.name && employee.name !== initialEmployee.name) {
+      nextEmployee = nextEmployee === employee
+        ? { ...nextEmployee, name: initialEmployee.name }
+        : { ...nextEmployee, name: initialEmployee.name }
+    }
+
+    return nextEmployee
   })
 }
 
@@ -160,12 +173,7 @@ function loadStoredState() {
 
     return {
       ...parsed,
-      employees: parsed.employees.map((employee) => {
-        const fallback = INITIAL_EMPLOYEES_BY_ID[employee.id]
-        if (!fallback) return employee
-        if (employee.baseSeat) return employee
-        return fallback.baseSeat ? { ...employee, baseSeat: fallback.baseSeat } : employee
-      }),
+      employees: mergeEmployeeSeatDefaults(parsed.employees),
     }
   } catch (error) {
     return {}
