@@ -2,6 +2,11 @@
 import { weekdayKey } from './dateUtils.js'
 import { PHYSICAL_SEATS_BY_LOCATION } from './deskLayouts.js'
 
+const BLOCKED_FLOATING_SEATS_BY_LOCATION = {
+  WEWORK: new Set(['3']),
+  OFICINA_93: new Set(),
+}
+
 // Historial simulado de meses previos para que la rotación arranque "justa".
 // (Editable; refleja lo discutido: Johana/Gabriel, luego Pinto/Alvarado, etc.)
 const ROTATION_SEED = ['jimenez-johana', 'garcia-gabriel', 'pinto-juan-felipe', 'alvarado-luis']
@@ -95,6 +100,7 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
     const byLocation = {}
 
     for (const location of ['WEWORK', 'OFICINA_93']) {
+      const blockedSeats = BLOCKED_FLOATING_SEATS_BY_LOCATION[location] || new Set()
       const presentRegularEmployees = activeEmployees
         .filter((employee) => !employee.isFloating && employee.baseLocation === location && employee.baseSeat)
         .filter((employee) => schedule.cells[`${employee.id}__${iso}`]?.status === 'OFFICE')
@@ -122,7 +128,7 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
       const occupiedAssignments = [...explicitOccupiedAssignments, ...derivedOccupiedAssignments].sort((left, right) => compareSeat(left.seat, right.seat))
       const occupiedSeats = occupiedAssignments.map((assignment) => assignment.seat)
 
-      const availableSeats = seatsByLocation[location].filter((seat) => !occupiedSeats.includes(seat))
+      const availableSeats = seatsByLocation[location].filter((seat) => !occupiedSeats.includes(seat) && !blockedSeats.has(seat))
       const remainingSeats = [...availableSeats]
       const presentFloaters = floaters
         .filter((employee) => employee.baseLocation === location)

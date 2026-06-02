@@ -32,7 +32,7 @@ const JUNE_2026_DESK_PRESET = {
     'pinto-juan-felipe__2026-06-05': '5',
     'arenas-juan__2026-06-01': 'TC',
     'arenas-juan__2026-06-02': 'TC',
-    'arenas-juan__2026-06-03': '3',
+    'arenas-juan__2026-06-03': '14',
     'arenas-juan__2026-06-04': '9',
     'arenas-juan__2026-06-05': '9',
     'jimenez-johana__2026-06-01': '15',
