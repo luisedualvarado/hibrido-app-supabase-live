@@ -111,8 +111,8 @@ const PRESET_TONE_BY_LABEL = {
 
 const byName = (a, b) => a.name.localeCompare(b.name, 'es')
 
-function isEligibleFloater(employee) {
-  return employee?.isFloating && employee.isActive && employee.hybridApproved
+function isListedFloater(employee) {
+  return employee?.isFloating
 }
 
 function resolveDeskCell(employee, iso, schedule, floatingResult, location, presetLabels = null) {
@@ -149,13 +149,13 @@ export default function FloatingSeats({ schedule, employees, floatingResult, mon
   const deskPreset = month === 5 && year === 2026 ? JUNE_2026_DESK_PRESET : null
 
   const filtered = useMemo(() => {
-    const eligibleEmployees = employees.filter(isEligibleFloater)
+    const listedFloaters = employees.filter(isListedFloater)
     const baseEmployees = deskPreset
       ? [
-          ...LOCATIONS.flatMap(([location]) => (deskPreset[location] || []).map((employeeId) => employeesById[employeeId]).filter(isEligibleFloater)),
-          ...eligibleEmployees.filter((employee) => !(deskPreset[employee.baseLocation] || []).includes(employee.id)),
+          ...LOCATIONS.flatMap(([location]) => (deskPreset[location] || []).map((employeeId) => employeesById[employeeId]).filter(isListedFloater)),
+          ...listedFloaters.filter((employee) => !(deskPreset[employee.baseLocation] || []).includes(employee.id)),
         ]
-      : eligibleEmployees
+      : listedFloaters
 
     return baseEmployees
       .filter((employee) => !search || employee.name.toLowerCase().includes(search.toLowerCase()))
