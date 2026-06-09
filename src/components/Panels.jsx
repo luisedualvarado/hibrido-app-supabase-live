@@ -547,8 +547,33 @@ export function Settings({ params, setParams }) {
 }
 
 /* ---------------- Export / Import ---------------- */
-export function ExportPanel({ buildSnapshot, schedule, employees, summary, alerts, onCopyShareLink, onImport, onRestoreBackup }) {
+export function ExportPanel({
+  buildSnapshot,
+  schedule,
+  employees,
+  summary,
+  alerts,
+  githubSyncEnabled,
+  githubSyncRepoLabel,
+  hasGithubToken,
+  githubSyncStatus,
+  githubSyncError,
+  onSaveGithubToken,
+  onClearGithubToken,
+  onCopyShareLink,
+  onImport,
+  onRestoreBackup,
+}) {
   const fileRef = React.useRef()
+  const [githubTokenInput, setGithubTokenInput] = useState('')
+  const githubStatusLabel = {
+    idle: 'Sin token configurado',
+    connecting: 'Conectando con GitHub',
+    ready: 'Listo para publicar cambios automaticos',
+    publishing: 'Publicando cambios para visitantes',
+    synced: 'Visitantes sincronizados',
+    error: 'Error de sincronizacion',
+  }[githubSyncStatus] || 'Sin sincronizacion'
   const doImport = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -556,6 +581,11 @@ export function ExportPanel({ buildSnapshot, schedule, employees, summary, alert
       const text = await file.text()
       onImport(JSON.parse(text))
     } catch (err) { alert('Archivo JSON inválido.') }
+  }
+  const saveGithubToken = () => {
+    if (!githubTokenInput.trim() || !onSaveGithubToken) return
+    onSaveGithubToken(githubTokenInput)
+    setGithubTokenInput('')
   }
   return (
     <div className="grid2">
@@ -579,6 +609,41 @@ export function ExportPanel({ buildSnapshot, schedule, employees, summary, alert
           <button className="btn btn-ghost" style={{ marginLeft: 8 }} onClick={onRestoreBackup}>Restaurar respaldo local</button>
         </div>
       </div>
+      {githubSyncEnabled && (
+        <div className="card">
+          <div className="card-head"><h3>Sincronizacion publica automatica</h3></div>
+          <div className="card-body">
+            <p className="muted" style={{ marginTop: 0 }}>
+              Cuando esta conexion queda activa, cualquier cambio del admin se publica solo para los visitantes.
+              Requiere un token fine-grained de GitHub con permiso <strong>Contents: Read and write</strong> sobre <strong>{githubSyncRepoLabel}</strong>.
+            </p>
+            <div className="badge navy" style={{ marginBottom: 12 }}>{githubStatusLabel}</div>
+            {hasGithubToken && <p className="muted" style={{ marginTop: 0 }}>Token cargado en esta sesion del navegador.</p>}
+            <div className="filters" style={{ marginBottom: 0 }}>
+              <div className="fg" style={{ minWidth: 280 }}>
+                <label>Token de GitHub</label>
+                <input
+                  type="password"
+                  placeholder={hasGithubToken ? 'Reemplazar token' : 'Pega el token del repo'}
+                  value={githubTokenInput}
+                  onChange={(e) => setGithubTokenInput(e.target.value)}
+                />
+              </div>
+              <div className="fg">
+                <label>&nbsp;</label>
+                <button className="btn btn-primary" onClick={saveGithubToken}>Guardar token</button>
+              </div>
+              {hasGithubToken && (
+                <div className="fg">
+                  <label>&nbsp;</label>
+                  <button className="btn btn-ghost" onClick={onClearGithubToken}>Quitar token</button>
+                </div>
+              )}
+            </div>
+            {githubSyncError && <div className="admin-access-error" style={{ marginTop: 12 }}>{githubSyncError}</div>}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

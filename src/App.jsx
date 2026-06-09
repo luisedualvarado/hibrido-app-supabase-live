@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { Sidebar } from './components/Shared.jsx'
 import Dashboard from './components/Dashboard.jsx'
 import MonthlySchedule from './components/MonthlySchedule.jsx'
@@ -19,6 +19,16 @@ import { assignLockersForMonth } from './logic/lockerGenerator.js'
 import { buildDailySummary, validateSchedule, buildDashboardKPIs } from './logic/validators.js'
 import { MONTH_LABEL, isHoliday, isOddCalendarDay, isWeekend } from './logic/dateUtils.js'
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string'
+import {
+  GITHUB_SYNC_ENABLED,
+  GITHUB_SYNC_POLL_INTERVAL_MS,
+  GITHUB_SYNC_REPO_LABEL,
+  clearGitHubSyncToken as clearStoredGitHubSyncToken,
+  fetchPublishedSnapshot,
+  loadGitHubSyncToken,
+  publishPublishedSnapshot,
+  saveGitHubSyncToken as storeGitHubSyncToken,
+} from './logic/githubSync.js'
 
 const TITLES = {
   dashboard: 'Dashboard',
@@ -455,6 +465,12 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(() => loadAdminSession())
   const [authError, setAuthError] = useState('')
   const isReadOnly = PUBLIC_READ_ONLY && !isAdmin
+  const [githubToken, setGithubToken] = useState(() => loadGitHubSyncToken())
+  const [githubSyncStatus, setGithubSyncStatus] = useState(() => (loadGitHubSyncToken() ? 'connecting' : 'idle'))
+  const [githubSyncError, setGithubSyncError] = useState('')
+  const [githubSyncReady, setGithubSyncReady] = useState(false)
+  const publishedShaRef = useRef(null)
+  const lastPublishedJsonRef = useRef(JSON.stringify(loadPublishedState()))
   const editableStored = stored
   const initialPeriod = useMemo(() => normalizePeriod(
     typeof editableStored.year === 'number' ? editableStored.year : now.getFullYear(),
@@ -661,8 +677,8 @@ export default function App() {
     setGenerationTick((tick) => tick + 1)
   }
 
-  const buildSnapshot = () => ({
-    version: 1,
+  const currentSnapshot = useMemo(() => ({
+    version: 2,
     employees,
     holidays,
     absences,
@@ -675,19 +691,22 @@ export default function App() {
     manualLockersByPeriod,
     manualDeskAssignmentsByPeriod,
     savedWeeksByPeriod,
-  })
+  }), [employees, holidays, absences, manualOverrides, params, month, year, manualParking, manualOffice93ByPeriod, manualLockersByPeriod, manualDeskAssignmentsByPeriod, savedWeeksByPeriod])
+  const currentSnapshotJson = useMemo(() => JSON.stringify(currentSnapshot), [currentSnapshot])
+  const buildSnapshot = useCallback(() => currentSnapshot, [currentSnapshot])
 
   const copyShareLink = useCallback(async () => {
-    const shareUrl = buildShareUrl(buildSnapshot())
+    const shareUrl = buildShareUrl(currentSnapshot)
     try {
       await window.navigator.clipboard.writeText(shareUrl)
       window.alert('Link compartible copiado. Quien abra ese link vera esta misma configuracion.')
     } catch (error) {
       window.prompt('Copia y comparte este link:', shareUrl)
     }
-  }, [employees, holidays, absences, manualOverrides, params, month, year, manualParking, manualOffice93ByPeriod, manualLockersByPeriod, manualDeskAssignmentsByPeriod, savedWeeksByPeriod])
+  }, [currentSnapshot])
 
-  const importSnapshot = (snap) => {
+  const importSnapshot = useCallback((snap, options = {}) => {
+    const { resetView = true } = options
     if (snap.employees) setEmployees(mergeEmployeeSeatDefaults(snap.employees))
     if (snap.holidays) setHolidays(snap.holidays)
     if (snap.absences) setAbsences(snap.absences)
@@ -708,8 +727,25 @@ export default function App() {
       const importedKey = periodKeyFor(nextPeriod.year, nextPeriod.month)
       setManualOffice93ByPeriod({ [importedKey]: snap.manualOffice93 })
     }
-    setView('dashboard')
-  }
+    if (resetView) setView('dashboard')
+  }, [month, year])
+
+  const saveGithubToken = useCallback((token) => {
+    const normalized = token.trim()
+    storeGitHubSyncToken(normalized)
+    setGithubToken(normalized)
+    setGithubSyncError('')
+    setGithubSyncStatus(normalized ? 'connecting' : 'idle')
+  }, [])
+
+  const clearGithubToken = useCallback(() => {
+    clearStoredGitHubSyncToken()
+    setGithubToken('')
+    setGithubSyncReady(false)
+    setGithubSyncError('')
+    setGithubSyncStatus('idle')
+    publishedShaRef.current = null
+  }, [])
 
   const restoreBackup = () => {
     const backup = latestBackup()
@@ -723,26 +759,109 @@ export default function App() {
 
   useEffect(() => {
     if (isReadOnly) return
-    const state = {
-      version: 2,
-      employees,
-      holidays,
-      absences,
-      manualOverrides,
-      params,
-      month,
-      year,
-      manualParking,
-      manualOffice93ByPeriod,
-      manualLockersByPeriod,
-      manualDeskAssignmentsByPeriod,
-      savedWeeksByPeriod,
-    }
     const previous = window.localStorage.getItem(STORAGE_KEY)
-    const next = JSON.stringify(state)
+    const next = currentSnapshotJson
     if (previous && previous !== next) rememberBackup(previous)
     window.localStorage.setItem(STORAGE_KEY, next)
-  }, [employees, holidays, absences, manualOverrides, params, month, year, manualParking, manualOffice93ByPeriod, manualLockersByPeriod, manualDeskAssignmentsByPeriod, savedWeeksByPeriod, isReadOnly])
+  }, [currentSnapshotJson, isReadOnly])
+
+  useEffect(() => {
+    if (!GITHUB_SYNC_ENABLED) return undefined
+
+    let cancelled = false
+    let intervalId = null
+
+    const refreshPublishedSnapshot = async () => {
+      try {
+        const remote = await fetchPublishedSnapshot()
+        if (cancelled || !remote?.snapshot) return
+        lastPublishedJsonRef.current = remote.json
+
+        if (!isReadOnly || remote.json === currentSnapshotJson) return
+        importSnapshot(remote.snapshot, { resetView: false })
+      } catch (error) {
+        if (!isReadOnly) return
+        setGithubSyncError(error.message || 'No se pudo actualizar la vista publica.')
+      }
+    }
+
+    refreshPublishedSnapshot()
+
+    if (!isReadOnly) {
+      return () => {
+        cancelled = true
+      }
+    }
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') refreshPublishedSnapshot()
+    }
+
+    intervalId = window.setInterval(refreshPublishedSnapshot, GITHUB_SYNC_POLL_INTERVAL_MS)
+    window.addEventListener('visibilitychange', handleVisibility)
+
+    return () => {
+      cancelled = true
+      if (intervalId) window.clearInterval(intervalId)
+      window.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [currentSnapshotJson, importSnapshot, isReadOnly])
+
+  useEffect(() => {
+    if (!GITHUB_SYNC_ENABLED || !isAdmin || !githubToken) {
+      setGithubSyncReady(false)
+      if (!githubToken) setGithubSyncStatus('idle')
+      return undefined
+    }
+
+    let cancelled = false
+
+    setGithubSyncStatus('connecting')
+    fetchPublishedSnapshot({ includeSha: true, token: githubToken })
+      .then((remote) => {
+        if (cancelled || !remote) return
+        publishedShaRef.current = remote.sha
+        lastPublishedJsonRef.current = remote.json
+        setGithubSyncReady(true)
+        setGithubSyncStatus('ready')
+        setGithubSyncError('')
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setGithubSyncReady(false)
+        setGithubSyncStatus('error')
+        setGithubSyncError(error.message || 'No se pudo conectar la sincronizacion publica.')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [githubToken, isAdmin])
+
+  useEffect(() => {
+    if (!GITHUB_SYNC_ENABLED || !isAdmin || !githubToken || !githubSyncReady) return undefined
+    if (currentSnapshotJson === lastPublishedJsonRef.current) return undefined
+
+    setGithubSyncStatus('publishing')
+    setGithubSyncError('')
+
+    const timerId = window.setTimeout(() => {
+      publishPublishedSnapshot(currentSnapshot, githubToken, publishedShaRef.current)
+        .then((result) => {
+          publishedShaRef.current = result?.sha || publishedShaRef.current
+          lastPublishedJsonRef.current = currentSnapshotJson
+          setGithubSyncStatus('synced')
+        })
+        .catch((error) => {
+          setGithubSyncStatus('error')
+          setGithubSyncError(error.message || 'No se pudo publicar la vista publica.')
+        })
+    }, 1500)
+
+    return () => {
+      window.clearTimeout(timerId)
+    }
+  }, [currentSnapshot, currentSnapshotJson, githubSyncReady, githubToken, isAdmin])
 
   useEffect(() => {
     if (isReadOnly && !PUBLIC_VIEWS.includes(view)) setView('dashboard')
@@ -886,6 +1005,13 @@ export default function App() {
               employees={computed.effectiveEmployees}
               summary={computed.summary}
               alerts={computed.allAlerts}
+              githubSyncEnabled={GITHUB_SYNC_ENABLED}
+              githubSyncRepoLabel={GITHUB_SYNC_REPO_LABEL}
+              hasGithubToken={Boolean(githubToken)}
+              githubSyncStatus={githubSyncStatus}
+              githubSyncError={githubSyncError}
+              onSaveGithubToken={saveGithubToken}
+              onClearGithubToken={clearGithubToken}
               onCopyShareLink={copyShareLink}
               onImport={importSnapshot}
               onRestoreBackup={restoreBackup}
