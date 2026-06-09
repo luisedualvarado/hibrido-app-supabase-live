@@ -156,6 +156,43 @@ function filterScheduleOverrides(overrides) {
   return overrides.filter((override) => !(isSavedWeekGeneratedOverride(override) && ['VACATION', 'ABSENCE'].includes(override.status)))
 }
 
+function isRotationEligible(employee) {
+  return Boolean(employee?.isActive && employee?.hybridApproved && employee?.baseLocation !== 'REMOTO')
+}
+
+function buildPreservedOverrides({ schedule, employees, existingOverrides, excludedEmployeeIds }) {
+  if (!schedule?.days?.length) return existingOverrides
+
+  const excluded = new Set(excludedEmployeeIds)
+  const existingKeys = new Set(existingOverrides.map((override) => `${override.employeeId}__${override.date}`))
+  const preserved = [...existingOverrides]
+  const createdAt = new Date().toISOString()
+
+  employees.forEach((employee) => {
+    if (excluded.has(employee.id)) return
+
+    schedule.days.forEach((iso) => {
+      const cell = schedule.cells[`${employee.id}__${iso}`]
+      if (!cell || !['HOME', 'OFFICE'].includes(cell.status)) return
+
+      const key = `${employee.id}__${iso}`
+      if (existingKeys.has(key)) return
+
+      preserved.push({
+        id: `${employee.id}-${iso}`,
+        employeeId: employee.id,
+        date: iso,
+        status: cell.status,
+        reason: 'Programacion preservada al habilitar nuevas personas',
+        createdAt,
+      })
+      existingKeys.add(key)
+    })
+  })
+
+  return preserved
+}
+
 function mergeEmployeeSeatDefaults(employeeList) {
   return employeeList.map((employee) => {
     const initialEmployee = INITIAL_EMPLOYEES_BY_ID[employee.id]
@@ -509,6 +546,25 @@ export default function App() {
     }
   }, [employees, holidays, absences, manualOverrides, month, year, params, manualParking, manualOffice93, hasManualOffice93, generationTick, isReadOnly, manualDeskAssignments, manualLockers])
 
+  const updateEmployees = useCallback((updater) => {
+    const nextEmployees = typeof updater === 'function' ? updater(employees) : updater
+    const previousEmployeesById = Object.fromEntries(employees.map((employee) => [employee.id, employee]))
+    const newlyEligibleIds = nextEmployees
+      .filter((employee) => isRotationEligible(employee) && !isRotationEligible(previousEmployeesById[employee.id]))
+      .map((employee) => employee.id)
+
+    if (newlyEligibleIds.length > 0) {
+      setManualOverrides((prev) => buildPreservedOverrides({
+        schedule: computed.schedule,
+        employees,
+        existingOverrides: prev,
+        excludedEmployeeIds: newlyEligibleIds,
+      }))
+    }
+
+    setEmployees(nextEmployees)
+  }, [computed.schedule, employees])
+
   const saveOverride = useCallback((employeeId, date, status, reason) => {
     setManualOverrides((prev) => {
       const without = prev.filter((o) => !(o.employeeId === employeeId && o.date === date))
@@ -773,8 +829,8 @@ export default function App() {
               setManualDeskAssignments={setManualDeskAssignmentsForPeriod}
             />
           )}
-          {view === 'people' && <People employees={employees} setEmployees={setEmployees} onDeleteEmployee={deleteEmployee} />}
-          {view === 'restrictions' && <Restrictions employees={employees} setEmployees={setEmployees} />}
+          {view === 'people' && <People employees={employees} setEmployees={updateEmployees} onDeleteEmployee={deleteEmployee} />}
+          {view === 'restrictions' && <Restrictions employees={employees} setEmployees={updateEmployees} />}
           {view === 'absences' && <Absences employees={employees} absences={absences} setAbsences={setAbsences} />}
           {view === 'holidays' && <Holidays holidays={holidays} setHolidays={setHolidays} />}
           {view === 'office93' && (

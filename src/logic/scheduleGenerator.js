@@ -283,6 +283,10 @@ function officePresentCount(employees, cells, iso, location) {
   ).length
 }
 
+function isProtectedManualOfficeCell(cells, employeeId, iso) {
+  return cells[`${employeeId}__${iso}`]?.source === 'MANUAL'
+}
+
 function weekForDate(weeks, iso) {
   return weeks.find((week) => week.workdays.includes(iso))
 }
@@ -326,7 +330,8 @@ function balanceOfficeCapacity({ employees, cells, days, weeks, holidays, params
     let present = officeEmployees.filter((employee) => cells[`${employee.id}__${iso}`]?.status === 'OFFICE')
     while (present.length > seats) {
       const week = weekForDate(weeks, iso)
-      const orderedCandidates = [...present]
+      const movablePresent = present.filter((employee) => !isProtectedManualOfficeCell(cells, employee.id, iso))
+      const orderedCandidates = [...movablePresent]
         .filter((employee) => employee.hybridApproved && !isSharedDeskEmployee(employee.id))
         .sort((a, b) => {
           const aCanRespect = canAssignHome(a, iso, cells, monthWorkdays)
@@ -353,7 +358,7 @@ function balanceOfficeCapacity({ employees, cells, days, weeks, holidays, params
       }
 
       if (!solved) {
-        const emergencyCandidates = [...present]
+        const emergencyCandidates = [...movablePresent]
           .filter((employee) => !isSharedDeskEmployee(employee.id))
           .sort((a, b) => {
             if (!!a.hybridApproved !== !!b.hybridApproved) return a.hybridApproved ? -1 : 1
