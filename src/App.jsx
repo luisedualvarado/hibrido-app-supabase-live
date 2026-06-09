@@ -266,7 +266,7 @@ function loadInitialState() {
   const sharedSnapshot = loadSharedSnapshot()
   if (sharedSnapshot) return sharedSnapshot
 
-  if (PUBLIC_READ_ONLY && !loadAdminSession()) {
+  if (PUBLIC_READ_ONLY) {
     const publishedState = loadPublishedState()
     if (Array.isArray(publishedState.employees)) return publishedState
   }
