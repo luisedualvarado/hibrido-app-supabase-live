@@ -10,7 +10,10 @@ Los datos viven en memoria (estados de React). Puedes **exportar/importar JSON**
 para conservar una configuración entre sesiones, y exportar CSV de programación,
 resumen diario y alertas.
 
-En el build público, la app abre en modo lectura. El sidebar incluye un acceso
+En desarrollo (`npm run dev`), la app queda editable y los cambios se guardan en
+`localStorage` del navegador. En el build público, la app abre en modo lectura.
+
+El sidebar incluye un acceso
 admin para desbloquear el resto de pestañas con las credenciales definidas en
 `VITE_ADMIN_USERNAME` y `VITE_ADMIN_PASSWORD`.
 

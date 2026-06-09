@@ -124,8 +124,8 @@ export function Sidebar({
         </div>
       )}
       <div className="sidebar-foot">
-        {readOnly ? 'Vista publica de solo lectura.' : 'Prototipo local · datos en memoria'}
-        {!readOnly && <><br />Importa/exporta JSON para persistir.</>}
+        {readOnly ? 'Vista publica de solo lectura.' : 'Modo local editable · cambios guardados en este navegador'}
+        {!readOnly && <><br />Importa/exporta JSON si quieres mover o respaldar la configuracion.</>}
       </div>
     </aside>
   )

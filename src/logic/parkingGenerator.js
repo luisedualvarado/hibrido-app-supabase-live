@@ -6,6 +6,7 @@ const BLOCKED_FLOATING_SEATS_BY_LOCATION = {
   WEWORK: new Set(['3']),
   OFICINA_93: new Set(),
 }
+const FLOATING_ASSIGNMENT_EXCEPTIONS = new Set(['cortes-german'])
 
 // Historial simulado de meses previos para que la rotación arranque "justa".
 // (Editable; refleja lo discutido: Johana/Gabriel, luego Pinto/Alvarado, etc.)
@@ -57,7 +58,11 @@ export function parkingUsageByDay(schedule, assigned, employees, days) {
 // seatAssignment.js — asignación diaria de puestos a flotantes.
 // Los flotantes ocupan los puestos físicos libres de WeWork y Oficina 93.
 export function assignFloatingSeats(schedule, employees, days, params, manualDeskAssignments = []) {
-  const floaters = employees.filter((e) => e.isFloating && e.isActive && e.hybridApproved)
+  const floaters = employees.filter((employee) => (
+    employee.isFloating &&
+    employee.isActive &&
+    (employee.hybridApproved || FLOATING_ASSIGNMENT_EXCEPTIONS.has(employee.id))
+  ))
   const activeEmployees = employees.filter((e) => e.isActive)
   const employeesById = Object.fromEntries(employees.map((employee) => [employee.id, employee]))
   const locationLabels = {

@@ -236,6 +236,115 @@ function loadAdminSession() {
   }
 }
 
+function buildComputedState({
+  employees,
+  holidays,
+  absences,
+  manualOverrides,
+  month,
+  year,
+  params,
+  manualParking,
+  manualOffice93,
+  hasManualOffice93,
+  manualDeskAssignments,
+  manualLockers,
+  readOnly,
+}) {
+  const isPublishedJune = PUBLIC_READ_ONLY && year === MIN_YEAR && month === MIN_MONTH
+  const publicJuneOffice93 = isPublishedJune
+    ? PUBLIC_JUNE_OFFICE93_IDS
+    : null
+  const effectiveParams = isPublishedJune
+    ? { ...params, ...PUBLIC_JUNE_PARAMS_OVERRIDE }
+    : params
+  const office93AssignedAuto = assignOffice93ForMonth({ employees, params, monthIndex: month, manualOffice93 })
+  const office93Assigned = publicJuneOffice93 || (hasManualOffice93 ? Array.from(new Set(manualOffice93)) : office93AssignedAuto)
+  const effectiveEmployees = applyOffice93Assignment(employees, office93Assigned)
+  const effectiveManualOverrides = filterScheduleOverrides(manualOverrides)
+
+  const base = generateMonthlySchedule({
+    employees: effectiveEmployees,
+    holidays,
+    absences,
+    manualOverrides: effectiveManualOverrides,
+    month,
+    year,
+    params: effectiveParams,
+    generationSeed: `${year}-${month}`,
+  })
+  const schedule = enforceNoOfficeOvercapacity(
+    applyManualOverrides(base, effectiveManualOverrides, effectiveEmployees, effectiveParams),
+    effectiveEmployees,
+    holidays,
+    effectiveParams,
+    `${year}-${month}-final`
+  )
+
+  const publicJuneAdjusted = isPublishedJune
+    ? applyPublicJuneOffice93Adjustments(schedule, effectiveEmployees, holidays)
+    : { schedule, employees: effectiveEmployees }
+  const effectiveSchedule = publicJuneAdjusted.schedule
+  const effectiveEmployeesView = publicJuneAdjusted.employees
+
+  const parkingAssignedAuto = assignParkingForMonth({
+    employees: effectiveEmployeesView,
+    params: effectiveParams,
+    monthIndex: month,
+    manualParking,
+  })
+  const parkingAssigned = (manualParking.length ? manualParking : parkingAssignedAuto).slice(0, effectiveParams.parkingSpots)
+
+  const parkingUsage = parkingUsageByDay(effectiveSchedule, parkingAssigned, effectiveEmployeesView, effectiveSchedule.days)
+  const { result: floatingResult, alerts: floatAlerts } = assignFloatingSeats(
+    effectiveSchedule,
+    effectiveEmployeesView,
+    effectiveSchedule.days,
+    effectiveParams,
+    manualDeskAssignments
+  )
+  const effectiveManualLockers = isPublishedJune && readOnly
+    ? PUBLIC_JUNE_LOCKER_ASSIGNMENTS
+    : manualLockers
+  const lockerResult = assignLockersForMonth({
+    employees: effectiveEmployeesView,
+    lockerCount: effectiveParams.lockers,
+    manualAssignments: effectiveManualLockers,
+  })
+
+  const { summary, alerts: dailyAlerts } = buildDailySummary(
+    effectiveSchedule,
+    effectiveEmployeesView,
+    effectiveSchedule.days,
+    effectiveParams,
+    parkingUsage,
+    floatingResult,
+    holidays
+  )
+  const validationAlerts = validateSchedule(effectiveSchedule, effectiveEmployeesView, year, month, holidays)
+
+  const allAlerts = [...effectiveSchedule.alerts, ...floatAlerts, ...dailyAlerts, ...validationAlerts]
+    .sort((a, b) => {
+      const order = { CRITICAL: 0, WARNING: 1, INFO: 2 }
+      return order[a.severity] - order[b.severity]
+    })
+  const kpis = buildDashboardKPIs(effectiveEmployeesView, summary, effectiveParams, parkingAssigned, allAlerts)
+
+  return {
+    schedule: effectiveSchedule,
+    effectiveEmployees: effectiveEmployeesView,
+    office93Assigned,
+    parkingAssigned,
+    parkingUsage,
+    floatingResult,
+    lockerResult,
+    summary,
+    allAlerts,
+    kpis,
+    effectiveParams,
+  }
+}
+
 function applyPublicJuneOffice93Adjustments(schedule, employees, holidays) {
   const adjustedEmployees = employees.map((employee) => (
     PUBLIC_JUNE_EMPLOYEE_OVERRIDES[employee.id]
@@ -310,6 +419,7 @@ export default function App() {
     typeof editableStored.month === 'number' ? editableStored.month : now.getMonth()
   ), [editableStored, now])
   const [view, setView] = useState('dashboard')
+  const isPublishedPublicView = PUBLIC_READ_ONLY && PUBLIC_VIEWS.includes(view)
   const showPeriodControls = ['dashboard', 'monthly', 'daily', 'desks', 'office93', 'lockers'].includes(view)
   const [employees, setEmployees] = useState(mergeEmployeeSeatDefaults(editableStored.employees || initialEmployees))
   const [holidays, setHolidays] = useState(editableStored.holidays || initialHolidays)
@@ -414,100 +524,43 @@ export default function App() {
     setMonth(next.month)
   }
 
-  const computed = useMemo(() => {
-    const isPublishedJune = PUBLIC_READ_ONLY && year === MIN_YEAR && month === MIN_MONTH
-    const publicJuneOffice93 = isPublishedJune
-      ? PUBLIC_JUNE_OFFICE93_IDS
-      : null
-    const effectiveParams = isPublishedJune
-      ? { ...params, ...PUBLIC_JUNE_PARAMS_OVERRIDE }
-      : params
-    const office93AssignedAuto = assignOffice93ForMonth({ employees, params, monthIndex: month, manualOffice93 })
-    const office93Assigned = publicJuneOffice93 || (hasManualOffice93 ? Array.from(new Set(manualOffice93)) : office93AssignedAuto)
-    const effectiveEmployees = applyOffice93Assignment(employees, office93Assigned)
-    const effectiveManualOverrides = filterScheduleOverrides(manualOverrides)
+  const computed = useMemo(() => buildComputedState({
+    employees,
+    holidays,
+    absences,
+    manualOverrides,
+    month,
+    year,
+    params,
+    manualParking,
+    manualOffice93,
+    hasManualOffice93,
+    manualDeskAssignments,
+    manualLockers,
+    readOnly: isReadOnly,
+  }), [employees, holidays, absences, manualOverrides, month, year, params, manualParking, manualOffice93, hasManualOffice93, generationTick, isReadOnly, manualDeskAssignments, manualLockers])
 
-    const base = generateMonthlySchedule({
-      employees: effectiveEmployees,
-      holidays,
-      absences,
-      manualOverrides: effectiveManualOverrides,
-      month,
-      year,
-      params: effectiveParams,
-      generationSeed: `${year}-${month}`,
-    })
-    const schedule = enforceNoOfficeOvercapacity(
-      applyManualOverrides(base, effectiveManualOverrides, effectiveEmployees, effectiveParams),
-      effectiveEmployees,
-      holidays,
-      effectiveParams,
-      `${year}-${month}-final`
-    )
+  const publishedComputed = useMemo(() => buildComputedState({
+    employees: initialEmployees,
+    holidays: initialHolidays,
+    absences: initialAbsences,
+    manualOverrides: [],
+    month: MIN_MONTH,
+    year: MIN_YEAR,
+    params: defaultParameters,
+    manualParking: [],
+    manualOffice93: EMPTY_ARRAY,
+    hasManualOffice93: false,
+    manualDeskAssignments: EMPTY_ARRAY,
+    manualLockers: EMPTY_ARRAY,
+    readOnly: true,
+  }), [])
 
-    const publicJuneAdjusted = isPublishedJune
-      ? applyPublicJuneOffice93Adjustments(schedule, effectiveEmployees, holidays)
-      : { schedule, employees: effectiveEmployees }
-    const effectiveSchedule = publicJuneAdjusted.schedule
-    const effectiveEmployeesView = publicJuneAdjusted.employees
-
-    const parkingAssignedAuto = assignParkingForMonth({
-      employees: effectiveEmployeesView,
-      params: effectiveParams,
-      monthIndex: month,
-      manualParking,
-    })
-    const parkingAssigned = (manualParking.length ? manualParking : parkingAssignedAuto).slice(0, effectiveParams.parkingSpots)
-
-    const parkingUsage = parkingUsageByDay(effectiveSchedule, parkingAssigned, effectiveEmployeesView, effectiveSchedule.days)
-    const { result: floatingResult, alerts: floatAlerts } = assignFloatingSeats(
-      effectiveSchedule,
-      effectiveEmployeesView,
-      effectiveSchedule.days,
-      effectiveParams,
-      manualDeskAssignments
-    )
-    const effectiveManualLockers = isPublishedJune && isReadOnly
-      ? PUBLIC_JUNE_LOCKER_ASSIGNMENTS
-      : manualLockers
-    const lockerResult = assignLockersForMonth({
-      employees: effectiveEmployeesView,
-      lockerCount: effectiveParams.lockers,
-      manualAssignments: effectiveManualLockers,
-    })
-
-    const { summary, alerts: dailyAlerts } = buildDailySummary(
-      effectiveSchedule,
-      effectiveEmployeesView,
-      effectiveSchedule.days,
-      effectiveParams,
-      parkingUsage,
-      floatingResult,
-      holidays
-    )
-    const validationAlerts = validateSchedule(effectiveSchedule, effectiveEmployeesView, year, month, holidays)
-
-    const allAlerts = [...effectiveSchedule.alerts, ...floatAlerts, ...dailyAlerts, ...validationAlerts]
-      .sort((a, b) => {
-        const order = { CRITICAL: 0, WARNING: 1, INFO: 2 }
-        return order[a.severity] - order[b.severity]
-      })
-    const kpis = buildDashboardKPIs(effectiveEmployeesView, summary, effectiveParams, parkingAssigned, allAlerts)
-
-    return {
-      schedule: effectiveSchedule,
-      effectiveEmployees: effectiveEmployeesView,
-      office93Assigned,
-      parkingAssigned,
-      parkingUsage,
-      floatingResult,
-      lockerResult,
-      summary,
-      allAlerts,
-      kpis,
-      effectiveParams,
-    }
-  }, [employees, holidays, absences, manualOverrides, month, year, params, manualParking, manualOffice93, hasManualOffice93, generationTick, isReadOnly, manualDeskAssignments, manualLockers])
+  const usePublishedSnapshot = isPublishedPublicView && view !== 'monthly'
+  const activeComputed = usePublishedSnapshot ? publishedComputed : computed
+  const activeMonth = usePublishedSnapshot ? MIN_MONTH : month
+  const activeYear = usePublishedSnapshot ? MIN_YEAR : year
+  const activeReadOnly = isReadOnly || usePublishedSnapshot
 
   const saveOverride = useCallback((employeeId, date, status, reason) => {
     setManualOverrides((prev) => {
@@ -695,11 +748,11 @@ export default function App() {
           <div>
             <h2>{TITLES[view]}</h2>
             <div className="meta">
-              {MONTH_LABEL[month]} {year} · {computed.kpis.approvedCount} en rotacion · {computed.office93Assigned.length} en Oficina 93 · {computed.kpis.criticalAlerts} alertas criticas
+              {MONTH_LABEL[activeMonth]} {activeYear} · {activeComputed.kpis.approvedCount} en rotacion · {activeComputed.office93Assigned.length} en Oficina 93 · {activeComputed.kpis.criticalAlerts} alertas criticas
             </div>
           </div>
           <div className="topbar-actions">
-            {showPeriodControls && !isReadOnly && (
+            {showPeriodControls && !activeReadOnly && (
               <div className="topbar-period">
                 <div className="topbar-field">
                   <label>Mes</label>
@@ -717,58 +770,58 @@ export default function App() {
                 </div>
               </div>
             )}
-            {!isReadOnly && <button className="btn btn-ghost" onClick={clearOverrides}>Limpiar ajustes</button>}
-            {!isReadOnly && <button className="btn btn-green" onClick={regenerate}>Generar programacion</button>}
+            {!activeReadOnly && <button className="btn btn-ghost" onClick={clearOverrides}>Limpiar ajustes</button>}
+            {!activeReadOnly && <button className="btn btn-green" onClick={regenerate}>Generar programacion</button>}
           </div>
         </header>
         <main className="content">
           {view === 'dashboard' && (
             <Dashboard
-              kpis={computed.kpis}
-              summary={computed.summary}
-              alerts={computed.allAlerts}
-              month={month}
-              year={year}
-              params={computed.effectiveParams}
-              employees={computed.effectiveEmployees}
-              schedule={computed.schedule}
-              parkingAssigned={computed.parkingAssigned}
-              hideAlerts={isReadOnly}
+              kpis={activeComputed.kpis}
+              summary={activeComputed.summary}
+              alerts={activeComputed.allAlerts}
+              month={activeMonth}
+              year={activeYear}
+              params={activeComputed.effectiveParams}
+              employees={activeComputed.effectiveEmployees}
+              schedule={activeComputed.schedule}
+              parkingAssigned={activeComputed.parkingAssigned}
+              hideAlerts={activeReadOnly}
             />
           )}
           {view === 'monthly' && (
             <MonthlySchedule
-              schedule={computed.schedule}
-              employees={computed.effectiveEmployees}
+              schedule={activeComputed.schedule}
+              employees={activeComputed.effectiveEmployees}
               onSaveOverride={saveOverride}
               onDeleteOverride={deleteOverride}
               manualOverrides={manualOverrides}
               onSaveWeek={saveWeek}
               onClearWeek={clearWeek}
               savedWeeks={savedWeeks}
-              readOnly={isReadOnly}
-              hideAlerts={isReadOnly}
+              readOnly={activeReadOnly}
+              hideAlerts={activeReadOnly}
             />
           )}
           {view === 'daily' && (
             <DailyView
-              schedule={computed.schedule}
-              employees={computed.effectiveEmployees}
-              summary={computed.summary}
-              floatingResult={computed.floatingResult}
-              parkingUsage={computed.parkingUsage}
-              params={computed.effectiveParams}
-              hideAlerts={isReadOnly}
+              schedule={activeComputed.schedule}
+              employees={activeComputed.effectiveEmployees}
+              summary={activeComputed.summary}
+              floatingResult={activeComputed.floatingResult}
+              parkingUsage={activeComputed.parkingUsage}
+              params={activeComputed.effectiveParams}
+              hideAlerts={activeReadOnly}
             />
           )}
           {view === 'desks' && (
             <FloatingSeats
-              schedule={computed.schedule}
-              employees={computed.effectiveEmployees}
-              floatingResult={computed.floatingResult}
-              month={month}
-              year={year}
-              readOnly={isReadOnly}
+              schedule={activeComputed.schedule}
+              employees={activeComputed.effectiveEmployees}
+              floatingResult={activeComputed.floatingResult}
+              month={activeMonth}
+              year={activeYear}
+              readOnly={activeReadOnly}
               manualDeskAssignments={manualDeskAssignments}
               setManualDeskAssignments={setManualDeskAssignmentsForPeriod}
             />
@@ -789,14 +842,14 @@ export default function App() {
           )}
           {view === 'lockers' && (
             <Lockers
-              employees={computed.effectiveEmployees}
-              lockerResult={computed.lockerResult}
+              employees={activeComputed.effectiveEmployees}
+              lockerResult={activeComputed.lockerResult}
               manualLockers={manualLockers}
               setManualLockers={setManualLockersForPeriod}
               params={params}
-              month={month}
-              year={year}
-              readOnly={isReadOnly}
+              month={activeMonth}
+              year={activeYear}
+              readOnly={activeReadOnly}
             />
           )}
           {view === 'parking' && (
