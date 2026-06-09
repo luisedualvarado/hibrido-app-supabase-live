@@ -413,13 +413,12 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(() => loadAdminSession())
   const [authError, setAuthError] = useState('')
   const isReadOnly = PUBLIC_READ_ONLY && !isAdmin
-  const editableStored = isReadOnly ? {} : stored
+  const editableStored = stored
   const initialPeriod = useMemo(() => normalizePeriod(
     typeof editableStored.year === 'number' ? editableStored.year : now.getFullYear(),
     typeof editableStored.month === 'number' ? editableStored.month : now.getMonth()
   ), [editableStored, now])
   const [view, setView] = useState('dashboard')
-  const isPublishedPublicView = PUBLIC_READ_ONLY && PUBLIC_VIEWS.includes(view)
   const showPeriodControls = ['dashboard', 'monthly', 'daily', 'desks', 'office93', 'lockers'].includes(view)
   const [employees, setEmployees] = useState(mergeEmployeeSeatDefaults(editableStored.employees || initialEmployees))
   const [holidays, setHolidays] = useState(editableStored.holidays || initialHolidays)
@@ -433,7 +432,6 @@ export default function App() {
   const [manualLockersByPeriod, setManualLockersByPeriod] = useState(editableStored.manualLockersByPeriod || {})
   const [manualDeskAssignmentsByPeriod, setManualDeskAssignmentsByPeriod] = useState(editableStored.manualDeskAssignmentsByPeriod || {})
   const [savedWeeksByPeriod, setSavedWeeksByPeriod] = useState(editableStored.savedWeeksByPeriod || {})
-  const [didHydrateStoredState, setDidHydrateStoredState] = useState(false)
   const [generationTick, setGenerationTick] = useState(0)
   const periodKey = periodKeyFor(year, month)
   const hasManualOffice93 = Object.prototype.hasOwnProperty.call(manualOffice93ByPeriod, periodKey)
@@ -465,13 +463,6 @@ export default function App() {
     setAuthError('')
     setView('dashboard')
   }, [])
-
-  useEffect(() => {
-    if (isReadOnly && (year !== MIN_YEAR || month !== MIN_MONTH)) {
-      setYear(MIN_YEAR)
-      setMonth(MIN_MONTH)
-    }
-  }, [isReadOnly, month, year])
 
   useEffect(() => {
     if (!PUBLIC_READ_ONLY) return
@@ -540,27 +531,10 @@ export default function App() {
     readOnly: isReadOnly,
   }), [employees, holidays, absences, manualOverrides, month, year, params, manualParking, manualOffice93, hasManualOffice93, generationTick, isReadOnly, manualDeskAssignments, manualLockers])
 
-  const publishedComputed = useMemo(() => buildComputedState({
-    employees: initialEmployees,
-    holidays: initialHolidays,
-    absences: initialAbsences,
-    manualOverrides: [],
-    month: MIN_MONTH,
-    year: MIN_YEAR,
-    params: defaultParameters,
-    manualParking: [],
-    manualOffice93: EMPTY_ARRAY,
-    hasManualOffice93: false,
-    manualDeskAssignments: EMPTY_ARRAY,
-    manualLockers: EMPTY_ARRAY,
-    readOnly: true,
-  }), [])
-
-  const usePublishedSnapshot = isPublishedPublicView && view !== 'monthly'
-  const activeComputed = usePublishedSnapshot ? publishedComputed : computed
-  const activeMonth = usePublishedSnapshot ? MIN_MONTH : month
-  const activeYear = usePublishedSnapshot ? MIN_YEAR : year
-  const activeReadOnly = isReadOnly || usePublishedSnapshot
+  const activeComputed = computed
+  const activeMonth = month
+  const activeYear = year
+  const activeReadOnly = isReadOnly
 
   const saveOverride = useCallback((employeeId, date, status, reason) => {
     setManualOverrides((prev) => {
@@ -694,16 +668,6 @@ export default function App() {
     const ok = window.confirm(`Restaurar respaldo con ${backup.employees?.length || 0} personas? Esto reemplazara los datos actuales por ese respaldo.`)
     if (ok) importSnapshot(backup)
   }
-
-  useEffect(() => {
-    if (!PUBLIC_READ_ONLY || !isAdmin || didHydrateStoredState) return
-    if (!stored.employees?.length) {
-      setDidHydrateStoredState(true)
-      return
-    }
-    importSnapshot(stored)
-    setDidHydrateStoredState(true)
-  }, [didHydrateStoredState, isAdmin, stored])
 
   useEffect(() => {
     if (isReadOnly) return
