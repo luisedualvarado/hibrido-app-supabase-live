@@ -136,8 +136,9 @@ const STORAGE_KEY = 'hibrido-app-state-v2'
 const BACKUP_KEY = 'hibrido-app-state-v2-backup'
 const BACKUP_HISTORY_KEY = 'hibrido-app-state-v2-backups'
 const ADMIN_SESSION_KEY = 'hibrido-app-admin-session'
-const ADMIN_USERNAME = import.meta.env.VITE_ADMIN_USERNAME || 'admin'
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123'
+const ADMIN_USERNAME = import.meta.env.VITE_ADMIN_USERNAME || ''
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || ''
+const ADMIN_ACCESS_ENABLED = Boolean(ADMIN_USERNAME && ADMIN_PASSWORD)
 const INITIAL_EMPLOYEES_BY_ID = Object.fromEntries(initialEmployees.map((employee) => [employee.id, employee]))
 const LIVE_SYNC_DEBOUNCE_MS = 1200
 
@@ -341,7 +342,7 @@ function applyPublicJuneOffice93Adjustments(schedule, employees, holidays) {
 export default function App() {
   const now = new Date()
   const stored = useMemo(() => loadStoredState(), [])
-  const [isAdmin, setIsAdmin] = useState(() => loadAdminSession())
+  const [isAdmin, setIsAdmin] = useState(() => ADMIN_ACCESS_ENABLED && loadAdminSession())
   const [authError, setAuthError] = useState('')
   const isReadOnly = PUBLIC_READ_ONLY && !isAdmin
   const editableStored = isReadOnly ? {} : stored
@@ -383,6 +384,11 @@ export default function App() {
   }, [isReadOnly])
 
   const handleAdminLogin = useCallback((username, password) => {
+    if (!ADMIN_ACCESS_ENABLED) {
+      setAuthError('Este build no tiene acceso admin configurado.')
+      return false
+    }
+
     const normalizedUsername = username.trim()
     if (normalizedUsername !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
       setAuthError('Credenciales admin invalidas.')
@@ -406,6 +412,12 @@ export default function App() {
     if (!PUBLIC_READ_ONLY) return
     if (isAdmin) window.sessionStorage.setItem(ADMIN_SESSION_KEY, 'true')
     else window.sessionStorage.removeItem(ADMIN_SESSION_KEY)
+  }, [isAdmin])
+
+  useEffect(() => {
+    if (ADMIN_ACCESS_ENABLED) return
+    window.sessionStorage.removeItem(ADMIN_SESSION_KEY)
+    if (isAdmin) setIsAdmin(false)
   }, [isAdmin])
 
   const setManualOffice93ForPeriod = useCallback((updater) => {
@@ -836,6 +848,7 @@ export default function App() {
         setView={setSafeView}
         readOnly={isReadOnly}
         isAdmin={isAdmin}
+        adminAccessEnabled={ADMIN_ACCESS_ENABLED}
         authError={authError}
         onAdminLogin={handleAdminLogin}
         onAdminLogout={handleAdminLogout}

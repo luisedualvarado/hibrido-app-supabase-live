@@ -47,6 +47,7 @@ export function Sidebar({
   setView,
   readOnly = false,
   isAdmin = false,
+  adminAccessEnabled = true,
   authError = '',
   onAdminLogin,
   onAdminLogout,
@@ -80,7 +81,7 @@ export function Sidebar({
           </button>
         ))}
       </nav>
-      {readOnly && (
+      {readOnly && adminAccessEnabled && (
         <form className="admin-access" onSubmit={handleSubmit}>
           <div className="admin-access-head">
             <div className="admin-access-kicker">Admin</div>
@@ -112,6 +113,15 @@ export function Sidebar({
           {authError && <div className="admin-access-error">{authError}</div>}
           <button type="submit" className="btn btn-primary btn-block admin-access-submit">Entrar como admin</button>
         </form>
+      )}
+      {readOnly && !adminAccessEnabled && (
+        <div className="admin-access admin-access-active">
+          <div className="admin-access-head">
+            <div className="admin-access-kicker">Admin</div>
+            <div className="admin-access-title">Acceso admin no configurado</div>
+            <div className="admin-access-copy">Este build publico no recibio credenciales admin durante el despliegue.</div>
+          </div>
+        </div>
       )}
       {!readOnly && isAdmin && (
         <div className="admin-access admin-access-active">

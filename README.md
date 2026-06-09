@@ -32,8 +32,8 @@ Configura estas variables en `.env.development` y `.env.production`:
 ```bash
 VITE_PUBLIC_READ_ONLY=true
 VITE_PUBLIC_PUBLISHED_JUNE=false
-VITE_ADMIN_USERNAME=admin
-VITE_ADMIN_PASSWORD=ME&I2026
+VITE_ADMIN_USERNAME=tu_usuario_admin
+VITE_ADMIN_PASSWORD=tu_password_admin
 VITE_SUPABASE_URL=tu_supabase_url
 VITE_SUPABASE_ANON_KEY=tu_supabase_anon_key
 VITE_SUPABASE_SNAPSHOT_TABLE=app_snapshots
@@ -67,17 +67,20 @@ Requisitos: Node 18+.
 
 ## Acceso admin
 
-Por defecto, tanto en desarrollo como en producción se crean estas
-credenciales:
+No dejes credenciales reales versionadas en el repo. Para desarrollo local,
+define `VITE_ADMIN_USERNAME` y `VITE_ADMIN_PASSWORD` en un archivo local no
+versionado, por ejemplo `.env.local` o `.env.development.local`.
+
+Para GitHub Pages, este repo ya queda preparado para leer:
 
 ```bash
-usuario: admin
-contrasena: ME&I2026
+Actions variable: VITE_ADMIN_USERNAME
+Actions secret:   VITE_ADMIN_PASSWORD
 ```
 
-Si vas a publicar el sitio, cambia esos valores en `.env.production`. Ten en
-cuenta que esta proteccion es solo del lado del cliente: sirve para ocultar y
-desbloquear la interfaz, no reemplaza autenticacion real con backend.
+Si el build público no recibe esas variables, la app se publica en solo lectura
+y el acceso admin aparece como no configurado. Esto sigue siendo proteccion del
+lado del cliente, no autenticacion real con backend.
 
 ## Crear el proyecto desde cero (si lo necesitas)
 
