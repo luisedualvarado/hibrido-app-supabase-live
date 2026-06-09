@@ -54,7 +54,7 @@ export default function Dashboard({
     params.seats93
   )
   const eligibleEmployees = employees.filter((employee) => employee.isActive && employee.hybridApproved)
-  const floaters = employees.filter((employee) => employee.isFloating)
+  const floaters = eligibleEmployees.filter((employee) => employee.isFloating)
   const workdayCount = workdays.length
   const healthyDays = workdays.filter((day) => day.alerts.length === 0).length
   const healthyRate = workdayCount ? (healthyDays / workdayCount) * 100 : 0
