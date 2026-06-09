@@ -1,18 +1,58 @@
 # Rotación Híbrida · Equipo ME&I (AECOM)
 
-Prototipo funcional (SPA en React + Vite, sin backend) para gestionar la
+Prototipo funcional (SPA en React + Vite) para gestionar la
 programación mensual de trabajo híbrido del equipo de ingeniería ME&I.
 Reemplaza el Excel de rotación con asignación automática de días de trabajo en
 casa, control de puestos en WeWork / Oficina 93, rotación de parqueaderos y
 asignación de puestos a personal flotante.
 
-Los datos viven en memoria (estados de React). Puedes **exportar/importar JSON**
-para conservar una configuración entre sesiones, y exportar CSV de programación,
-resumen diario y alertas.
+Los datos viven en estados de React y pueden guardarse localmente o en una
+fuente compartida. Puedes **exportar/importar JSON** para conservar una
+configuración entre sesiones, y exportar CSV de programación, resumen diario y
+alertas.
 
 En el build público, la app abre en modo lectura. El sidebar incluye un acceso
 admin para desbloquear el resto de pestañas con las credenciales definidas en
 `VITE_ADMIN_USERNAME` y `VITE_ADMIN_PASSWORD`.
+
+## Admin y público sincronizados con Supabase
+
+Esta copia puede trabajar con dos vistas separadas:
+
+1. Admin: entra con las credenciales del sidebar y edita la programación.
+2. Público: entra en modo solo lectura.
+
+Cuando configuras Supabase, cualquier cambio del admin se publica en una
+snapshot compartida y la vista pública la recibe casi en tiempo real.
+
+### Variables de entorno
+
+Configura estas variables en `.env.development` y `.env.production`:
+
+```bash
+VITE_PUBLIC_READ_ONLY=true
+VITE_PUBLIC_PUBLISHED_JUNE=false
+VITE_ADMIN_USERNAME=admin
+VITE_ADMIN_PASSWORD=ME&I2026
+VITE_SUPABASE_URL=tu_supabase_url
+VITE_SUPABASE_ANON_KEY=tu_supabase_anon_key
+VITE_SUPABASE_SNAPSHOT_TABLE=app_snapshots
+VITE_SUPABASE_SNAPSHOT_KEY=public
+```
+
+### Tabla de Supabase
+
+Ejecuta el SQL de [supabase/app_snapshots.sql](supabase/app_snapshots.sql) en tu
+proyecto de Supabase. Ese script crea la tabla `app_snapshots` y deja un
+registro base con la clave `public`.
+
+### Importante sobre seguridad
+
+La sesión admin de esta app sigue siendo del lado del cliente. Para que la app
+pueda escribir en Supabase usando la `anon key`, el SQL incluido deja abierta la
+escritura sobre esa tabla. Eso mantiene el comportamiento simple que pediste,
+pero no es seguridad fuerte. Si más adelante quieres blindar realmente quién
+puede publicar cambios, hace falta autenticación real o un backend intermedio.
 
 ## Cómo correrlo
 

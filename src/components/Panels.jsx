@@ -547,8 +547,17 @@ export function Settings({ params, setParams }) {
 }
 
 /* ---------------- Export / Import ---------------- */
-export function ExportPanel({ buildSnapshot, schedule, employees, summary, alerts, onImport, onRestoreBackup }) {
+export function ExportPanel({ buildSnapshot, schedule, employees, summary, alerts, liveSyncEnabled, liveSyncStatus, liveSyncError, onImport, onRestoreBackup }) {
   const fileRef = React.useRef()
+  const liveSyncLabel = {
+    disabled: 'Sincronizacion no configurada',
+    idle: 'Esperando vista admin o publica',
+    connecting: 'Conectando con Supabase',
+    ready: 'Sincronizacion lista',
+    publishing: 'Publicando cambios del admin',
+    synced: 'Publico actualizado',
+    error: 'Error de sincronizacion',
+  }[liveSyncStatus] || 'Sincronizacion no disponible'
   const doImport = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -576,6 +585,18 @@ export function ExportPanel({ buildSnapshot, schedule, employees, summary, alert
           <input ref={fileRef} type="file" accept="application/json" style={{ display: 'none' }} onChange={doImport} />
           <button className="btn btn-primary" onClick={() => fileRef.current?.click()}>Importar JSON de datos</button>
           <button className="btn btn-ghost" style={{ marginLeft: 8 }} onClick={onRestoreBackup}>Restaurar respaldo local</button>
+        </div>
+      </div>
+      <div className="card">
+        <div className="card-head"><h3>Sincronizacion admin / publico</h3></div>
+        <div className="card-body">
+          <div className={`badge ${liveSyncStatus === 'error' ? 'red' : liveSyncEnabled ? 'green' : 'gray'}`} style={{ marginBottom: 10 }}>{liveSyncLabel}</div>
+          <p className="muted" style={{ marginTop: 0 }}>
+            {liveSyncEnabled
+              ? 'La app usara Supabase para que el publico refleje automaticamente los cambios del admin en otros dispositivos.'
+              : 'Faltan variables de Supabase en el entorno. Mientras tanto, la app sigue funcionando solo con almacenamiento local.'}
+          </p>
+          {liveSyncError && <div className="admin-access-error">{liveSyncError}</div>}
         </div>
       </div>
     </div>

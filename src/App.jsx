@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { Sidebar } from './components/Shared.jsx'
 import Dashboard from './components/Dashboard.jsx'
 import MonthlySchedule from './components/MonthlySchedule.jsx'
@@ -17,6 +17,7 @@ import { assignOffice93ForMonth, applyOffice93Assignment } from './logic/locatio
 import { assignLockersForMonth } from './logic/lockerGenerator.js'
 import { buildDailySummary, validateSchedule, buildDashboardKPIs } from './logic/validators.js'
 import { MONTH_LABEL, isHoliday, isOddCalendarDay, isWeekend } from './logic/dateUtils.js'
+import { LIVE_SYNC_ENABLED, fetchLiveSnapshot, publishLiveSnapshot, subscribeToLiveSnapshot } from './logic/liveSnapshot.js'
 
 const TITLES = {
   dashboard: 'Dashboard',
@@ -40,6 +41,7 @@ const EMPTY_ARRAY = []
 const MIN_YEAR = 2026
 const MIN_MONTH = 5
 const PUBLIC_READ_ONLY = import.meta.env.VITE_PUBLIC_READ_ONLY === 'true'
+const PUBLIC_PUBLISHED_JUNE_LOCK = import.meta.env.VITE_PUBLIC_PUBLISHED_JUNE === 'true'
 const PUBLIC_VIEWS = ['dashboard', 'monthly', 'daily', 'desks', 'lockers']
 const PUBLIC_JUNE_OFFICE93_IDS = [
   'hilario-martin',
@@ -137,6 +139,7 @@ const ADMIN_SESSION_KEY = 'hibrido-app-admin-session'
 const ADMIN_USERNAME = import.meta.env.VITE_ADMIN_USERNAME || 'admin'
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123'
 const INITIAL_EMPLOYEES_BY_ID = Object.fromEntries(initialEmployees.map((employee) => [employee.id, employee]))
+const LIVE_SYNC_DEBOUNCE_MS = 1200
 
 function buildSavedWeekEntry(week) {
   return {
@@ -361,7 +364,13 @@ export default function App() {
   const [manualDeskAssignmentsByPeriod, setManualDeskAssignmentsByPeriod] = useState(editableStored.manualDeskAssignmentsByPeriod || {})
   const [savedWeeksByPeriod, setSavedWeeksByPeriod] = useState(editableStored.savedWeeksByPeriod || {})
   const [didHydrateStoredState, setDidHydrateStoredState] = useState(false)
+  const [liveSyncReady, setLiveSyncReady] = useState(() => !LIVE_SYNC_ENABLED)
+  const [liveSyncStatus, setLiveSyncStatus] = useState(() => LIVE_SYNC_ENABLED ? 'idle' : 'disabled')
+  const [liveSyncError, setLiveSyncError] = useState('')
   const [generationTick, setGenerationTick] = useState(0)
+  const currentSnapshotJsonRef = useRef('')
+  const lastLiveSnapshotJsonRef = useRef('')
+  const pendingLiveSnapshotJsonRef = useRef('')
   const periodKey = periodKeyFor(year, month)
   const hasManualOffice93 = Object.prototype.hasOwnProperty.call(manualOffice93ByPeriod, periodKey)
   const manualOffice93 = hasManualOffice93 ? manualOffice93ByPeriod[periodKey] : EMPTY_ARRAY
@@ -392,13 +401,6 @@ export default function App() {
     setAuthError('')
     setView('dashboard')
   }, [])
-
-  useEffect(() => {
-    if (isReadOnly && (year !== MIN_YEAR || month !== MIN_MONTH)) {
-      setYear(MIN_YEAR)
-      setMonth(MIN_MONTH)
-    }
-  }, [isReadOnly, month, year])
 
   useEffect(() => {
     if (!PUBLIC_READ_ONLY) return
@@ -452,7 +454,7 @@ export default function App() {
   }
 
   const computed = useMemo(() => {
-    const isPublishedJune = PUBLIC_READ_ONLY && year === MIN_YEAR && month === MIN_MONTH
+    const isPublishedJune = PUBLIC_PUBLISHED_JUNE_LOCK && isReadOnly && year === MIN_YEAR && month === MIN_MONTH
     const publicJuneOffice93 = isPublishedJune
       ? PUBLIC_JUNE_OFFICE93_IDS
       : null
@@ -648,8 +650,8 @@ export default function App() {
     setGenerationTick((tick) => tick + 1)
   }
 
-  const buildSnapshot = () => ({
-    version: 1,
+  const currentSnapshot = useMemo(() => ({
+    version: 2,
     employees,
     holidays,
     absences,
@@ -662,9 +664,12 @@ export default function App() {
     manualLockersByPeriod,
     manualDeskAssignmentsByPeriod,
     savedWeeksByPeriod,
-  })
+  }), [employees, holidays, absences, manualOverrides, params, month, year, manualParking, manualOffice93ByPeriod, manualLockersByPeriod, manualDeskAssignmentsByPeriod, savedWeeksByPeriod])
+  const currentSnapshotJson = useMemo(() => JSON.stringify(currentSnapshot), [currentSnapshot])
+  const buildSnapshot = useCallback(() => currentSnapshot, [currentSnapshot])
 
-  const importSnapshot = (snap) => {
+  const importSnapshot = useCallback((snap, options = {}) => {
+    const { resetView = true } = options
     if (snap.employees) setEmployees(mergeEmployeeSeatDefaults(snap.employees))
     if (snap.holidays) setHolidays(snap.holidays)
     if (snap.absences) setAbsences(snap.absences)
@@ -685,8 +690,8 @@ export default function App() {
       const importedKey = periodKeyFor(nextPeriod.year, nextPeriod.month)
       setManualOffice93ByPeriod({ [importedKey]: snap.manualOffice93 })
     }
-    setView('dashboard')
-  }
+    if (resetView) setView('dashboard')
+  }, [month, year])
 
   const restoreBackup = () => {
     const backup = latestBackup()
@@ -699,37 +704,126 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (!PUBLIC_READ_ONLY || !isAdmin || didHydrateStoredState) return
+    if (LIVE_SYNC_ENABLED || !PUBLIC_READ_ONLY || !isAdmin || didHydrateStoredState) return
     if (!stored.employees?.length) {
       setDidHydrateStoredState(true)
       return
     }
     importSnapshot(stored)
     setDidHydrateStoredState(true)
-  }, [didHydrateStoredState, isAdmin, stored])
+  }, [didHydrateStoredState, importSnapshot, isAdmin, stored])
+
+  useEffect(() => {
+    currentSnapshotJsonRef.current = currentSnapshotJson
+  }, [currentSnapshotJson])
+
+  useEffect(() => {
+    if (!LIVE_SYNC_ENABLED) return undefined
+    if (!isReadOnly && !isAdmin) {
+      setLiveSyncReady(false)
+      setLiveSyncStatus('idle')
+      setLiveSyncError('')
+      return undefined
+    }
+
+    let cancelled = false
+
+    const acceptRemoteSnapshot = (snapshot) => {
+      const nextJson = JSON.stringify(snapshot)
+      lastLiveSnapshotJsonRef.current = nextJson
+      if (currentSnapshotJsonRef.current === nextJson) {
+        pendingLiveSnapshotJsonRef.current = ''
+        setLiveSyncReady(true)
+        setLiveSyncStatus('ready')
+        setLiveSyncError('')
+        return
+      }
+
+      pendingLiveSnapshotJsonRef.current = nextJson
+      importSnapshot(snapshot, { resetView: false })
+    }
+
+    setLiveSyncReady(false)
+    setLiveSyncStatus('connecting')
+    setLiveSyncError('')
+
+    fetchLiveSnapshot()
+      .then((snapshot) => {
+        if (cancelled) return
+        if (snapshot) {
+          acceptRemoteSnapshot(snapshot)
+          return
+        }
+        setLiveSyncReady(true)
+        setLiveSyncStatus('ready')
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setLiveSyncReady(true)
+        setLiveSyncStatus('error')
+        setLiveSyncError(error.message || 'No se pudo cargar la vista compartida.')
+      })
+
+    const unsubscribe = subscribeToLiveSnapshot(
+      (snapshot) => {
+        if (cancelled || !snapshot) return
+        acceptRemoteSnapshot(snapshot)
+      },
+      (error) => {
+        if (cancelled) return
+        setLiveSyncStatus('error')
+        setLiveSyncError(error.message || 'No se pudo conectar la sincronizacion en tiempo real.')
+      }
+    )
+
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
+  }, [importSnapshot, isAdmin, isReadOnly])
+
+  useEffect(() => {
+    if (!LIVE_SYNC_ENABLED) return
+    if (!pendingLiveSnapshotJsonRef.current) return
+    if (currentSnapshotJson !== pendingLiveSnapshotJsonRef.current) return
+
+    pendingLiveSnapshotJsonRef.current = ''
+    setLiveSyncReady(true)
+    setLiveSyncStatus('ready')
+    setLiveSyncError('')
+  }, [currentSnapshotJson])
 
   useEffect(() => {
     if (isReadOnly) return
-    const state = {
-      version: 2,
-      employees,
-      holidays,
-      absences,
-      manualOverrides,
-      params,
-      month,
-      year,
-      manualParking,
-      manualOffice93ByPeriod,
-      manualLockersByPeriod,
-      manualDeskAssignmentsByPeriod,
-      savedWeeksByPeriod,
-    }
     const previous = window.localStorage.getItem(STORAGE_KEY)
-    const next = JSON.stringify(state)
+    const next = currentSnapshotJson
     if (previous && previous !== next) rememberBackup(previous)
     window.localStorage.setItem(STORAGE_KEY, next)
-  }, [employees, holidays, absences, manualOverrides, params, month, year, manualParking, manualOffice93ByPeriod, manualLockersByPeriod, manualDeskAssignmentsByPeriod, savedWeeksByPeriod, isReadOnly])
+  }, [currentSnapshotJson, isReadOnly])
+
+  useEffect(() => {
+    if (!LIVE_SYNC_ENABLED || isReadOnly || !isAdmin || !liveSyncReady) return undefined
+    if (currentSnapshotJson === lastLiveSnapshotJsonRef.current) return undefined
+
+    setLiveSyncStatus('publishing')
+    setLiveSyncError('')
+
+    const timerId = window.setTimeout(() => {
+      publishLiveSnapshot(currentSnapshot)
+        .then(() => {
+          lastLiveSnapshotJsonRef.current = currentSnapshotJson
+          setLiveSyncStatus('synced')
+        })
+        .catch((error) => {
+          setLiveSyncStatus('error')
+          setLiveSyncError(error.message || 'No se pudo publicar la vista compartida.')
+        })
+    }, LIVE_SYNC_DEBOUNCE_MS)
+
+    return () => {
+      window.clearTimeout(timerId)
+    }
+  }, [currentSnapshot, currentSnapshotJson, isAdmin, isReadOnly, liveSyncReady])
 
   useEffect(() => {
     if (isReadOnly && !PUBLIC_VIEWS.includes(view)) setView('dashboard')
@@ -873,6 +967,9 @@ export default function App() {
               employees={computed.effectiveEmployees}
               summary={computed.summary}
               alerts={computed.allAlerts}
+              liveSyncEnabled={LIVE_SYNC_ENABLED}
+              liveSyncStatus={liveSyncStatus}
+              liveSyncError={liveSyncError}
               onImport={importSnapshot}
               onRestoreBackup={restoreBackup}
             />
