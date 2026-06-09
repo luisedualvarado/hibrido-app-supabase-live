@@ -547,7 +547,7 @@ export function Settings({ params, setParams }) {
 }
 
 /* ---------------- Export / Import ---------------- */
-export function ExportPanel({ buildSnapshot, schedule, employees, summary, alerts, onImport, onRestoreBackup }) {
+export function ExportPanel({ buildSnapshot, schedule, employees, summary, alerts, onCopyShareLink, onImport, onRestoreBackup }) {
   const fileRef = React.useRef()
   const doImport = async (e) => {
     const file = e.target.files?.[0]
@@ -566,13 +566,14 @@ export function ExportPanel({ buildSnapshot, schedule, employees, summary, alert
           <button className="btn" onClick={() => exportToCSV(summaryToRows(summary), 'resumen_diario.csv')}>Exportar resumen diario CSV</button>
           <button className="btn" onClick={() => exportToCSV(alertsToRows(alerts), 'alertas.csv')}>Exportar alertas CSV</button>
           <button className="btn btn-primary" onClick={() => exportToJSON(buildSnapshot(), 'config_hibrido.json')}>Exportar JSON de datos</button>
+          <button className="btn btn-primary" onClick={onCopyShareLink}>Copiar link compartible</button>
           <button className="btn btn-ghost" onClick={() => alert('Generación de PDF disponible en una versión posterior.')}>Exportar PDF (próximamente)</button>
         </div>
       </div>
       <div className="card">
         <div className="card-head"><h3>Importar</h3></div>
         <div className="card-body">
-          <p className="muted" style={{ marginTop: 0 }}>Recupera una configuración previa (personas, restricciones, festivos, ausencias, parámetros y ajustes manuales).</p>
+          <p className="muted" style={{ marginTop: 0 }}>Recupera una configuración previa o comparte una vista exacta con el link generado desde Exportar.</p>
           <input ref={fileRef} type="file" accept="application/json" style={{ display: 'none' }} onChange={doImport} />
           <button className="btn btn-primary" onClick={() => fileRef.current?.click()}>Importar JSON de datos</button>
           <button className="btn btn-ghost" style={{ marginLeft: 8 }} onClick={onRestoreBackup}>Restaurar respaldo local</button>

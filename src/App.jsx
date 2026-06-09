@@ -17,6 +17,7 @@ import { assignOffice93ForMonth, applyOffice93Assignment } from './logic/locatio
 import { assignLockersForMonth } from './logic/lockerGenerator.js'
 import { buildDailySummary, validateSchedule, buildDashboardKPIs } from './logic/validators.js'
 import { MONTH_LABEL, isHoliday, isOddCalendarDay, isWeekend } from './logic/dateUtils.js'
+import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string'
 
 const TITLES = {
   dashboard: 'Dashboard',
@@ -134,6 +135,7 @@ const PUBLIC_JUNE_IVONNE_ABSENCE_DATES = new Set([
 const STORAGE_KEY = 'hibrido-app-state-v2'
 const BACKUP_KEY = 'hibrido-app-state-v2-backup'
 const BACKUP_HISTORY_KEY = 'hibrido-app-state-v2-backups'
+const SHARE_SNAPSHOT_PARAM = 'snapshot'
 const ADMIN_SESSION_KEY = 'hibrido-app-admin-session'
 const ADMIN_USERNAME = import.meta.env.VITE_ADMIN_USERNAME || 'admin'
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123'
@@ -227,6 +229,35 @@ function loadStoredState() {
   } catch (error) {
     return {}
   }
+}
+
+function loadSharedSnapshot() {
+  try {
+    const url = new URL(window.location.href)
+    const compressed = url.searchParams.get(SHARE_SNAPSHOT_PARAM)
+    if (!compressed) return null
+
+    const decompressed = decompressFromEncodedURIComponent(compressed)
+    const parsed = parseJSON(decompressed) || {}
+    if (!Array.isArray(parsed.employees)) return parsed
+
+    return {
+      ...parsed,
+      employees: mergeEmployeeSeatDefaults(parsed.employees),
+    }
+  } catch (error) {
+    return null
+  }
+}
+
+function loadInitialState() {
+  return loadSharedSnapshot() || loadStoredState()
+}
+
+function buildShareUrl(snapshot) {
+  const url = new URL(window.location.href)
+  url.searchParams.set(SHARE_SNAPSHOT_PARAM, compressToEncodedURIComponent(JSON.stringify(snapshot)))
+  return url.toString()
 }
 
 function loadAdminSession() {
@@ -410,7 +441,7 @@ function applyPublicJuneOffice93Adjustments(schedule, employees, holidays) {
 
 export default function App() {
   const now = new Date()
-  const stored = useMemo(() => loadStoredState(), [])
+  const stored = useMemo(() => loadInitialState(), [])
   const [isAdmin, setIsAdmin] = useState(() => loadAdminSession())
   const [authError, setAuthError] = useState('')
   const isReadOnly = PUBLIC_READ_ONLY && !isAdmin
@@ -636,6 +667,16 @@ export default function App() {
     savedWeeksByPeriod,
   })
 
+  const copyShareLink = useCallback(async () => {
+    const shareUrl = buildShareUrl(buildSnapshot())
+    try {
+      await window.navigator.clipboard.writeText(shareUrl)
+      window.alert('Link compartible copiado. Quien abra ese link vera esta misma configuracion.')
+    } catch (error) {
+      window.prompt('Copia y comparte este link:', shareUrl)
+    }
+  }, [employees, holidays, absences, manualOverrides, params, month, year, manualParking, manualOffice93ByPeriod, manualLockersByPeriod, manualDeskAssignmentsByPeriod, savedWeeksByPeriod])
+
   const importSnapshot = (snap) => {
     if (snap.employees) setEmployees(mergeEmployeeSeatDefaults(snap.employees))
     if (snap.holidays) setHolidays(snap.holidays)
@@ -835,6 +876,7 @@ export default function App() {
               employees={computed.effectiveEmployees}
               summary={computed.summary}
               alerts={computed.allAlerts}
+              onCopyShareLink={copyShareLink}
               onImport={importSnapshot}
               onRestoreBackup={restoreBackup}
             />

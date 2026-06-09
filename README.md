@@ -9,6 +9,9 @@ asignación de puestos a personal flotante.
 Los datos viven en memoria (estados de React). Puedes **exportar/importar JSON**
 para conservar una configuración entre sesiones, y exportar CSV de programación,
 resumen diario y alertas.
+Si necesitas que otra persona vea exactamente la misma configuración sin usar tu
+navegador, usa **Copiar link compartible** desde Exportar/Importar: la app carga
+ese snapshot directamente desde la URL.
 
 En desarrollo (`npm run dev`), la app queda editable y los cambios se guardan en
 `localStorage` del navegador. En el build público, la app abre en modo lectura.
