@@ -18,6 +18,9 @@ En desarrollo (`npm run dev`), la app queda editable y los cambios se guardan en
 Si necesitas congelar junio de 2026 con el preset publicado, activa
 `VITE_PUBLIC_PUBLISHED_JUNE=true`; por defecto la vista pública usa el mismo
 estado calculado que ve admin en ese navegador.
+La URL base pública carga el snapshot publicado en
+`src/data/publishedSnapshot.json`; si quieres cambiar lo que ve todo el mundo en
+esa URL, actualiza ese snapshot y vuelve a desplegar.
 
 El sidebar incluye un acceso
 admin para desbloquear el resto de pestañas con las credenciales definidas en
@@ -33,6 +36,13 @@ npm run preview  # sirve el build
 ```
 
 Requisitos: Node 18+.
+
+## Publicar lo que muestra la URL base
+
+1. Exporta tu configuración actual desde la app como JSON.
+2. Ejecuta `npm run publish:snapshot -- ruta/al/archivo.json`.
+3. Revisa el cambio en `src/data/publishedSnapshot.json`.
+4. Haz commit y deploy para que la URL base muestre esa versión a todos.
 
 ## Acceso admin
 

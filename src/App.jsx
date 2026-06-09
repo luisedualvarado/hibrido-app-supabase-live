@@ -10,6 +10,7 @@ import { Absences, Holidays, Parking, Office93Rotation, Lockers, ManualOverrides
 
 import { initialEmployees } from './data/initialEmployees.js'
 import { initialHolidays, initialAbsences, defaultParameters } from './data/initialHolidays.js'
+import publishedSnapshot from './data/publishedSnapshot.json'
 
 import { enforceNoOfficeOvercapacity, generateMonthlySchedule } from './logic/scheduleGenerator.js'
 import { assignParkingForMonth, parkingUsageByDay, assignFloatingSeats, applyManualOverrides } from './logic/parkingGenerator.js'
@@ -219,16 +220,23 @@ function latestBackup() {
 function loadStoredState() {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
-    const parsed = parseJSON(raw) || {}
-    if (!Array.isArray(parsed.employees)) return parsed
-
-    return {
-      ...parsed,
-      employees: mergeEmployeeSeatDefaults(parsed.employees),
-    }
+    return hydrateSnapshotState(parseJSON(raw) || {})
   } catch (error) {
     return {}
   }
+}
+
+function hydrateSnapshotState(parsed) {
+  if (!Array.isArray(parsed.employees)) return parsed
+
+  return {
+    ...parsed,
+    employees: mergeEmployeeSeatDefaults(parsed.employees),
+  }
+}
+
+function loadPublishedState() {
+  return hydrateSnapshotState(publishedSnapshot || {})
 }
 
 function loadSharedSnapshot() {
@@ -238,20 +246,22 @@ function loadSharedSnapshot() {
     if (!compressed) return null
 
     const decompressed = decompressFromEncodedURIComponent(compressed)
-    const parsed = parseJSON(decompressed) || {}
-    if (!Array.isArray(parsed.employees)) return parsed
-
-    return {
-      ...parsed,
-      employees: mergeEmployeeSeatDefaults(parsed.employees),
-    }
+    return hydrateSnapshotState(parseJSON(decompressed) || {})
   } catch (error) {
     return null
   }
 }
 
 function loadInitialState() {
-  return loadSharedSnapshot() || loadStoredState()
+  const sharedSnapshot = loadSharedSnapshot()
+  if (sharedSnapshot) return sharedSnapshot
+
+  if (PUBLIC_READ_ONLY && !loadAdminSession()) {
+    const publishedState = loadPublishedState()
+    if (Array.isArray(publishedState.employees)) return publishedState
+  }
+
+  return loadStoredState()
 }
 
 function buildShareUrl(snapshot) {
