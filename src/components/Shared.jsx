@@ -139,7 +139,7 @@ export function Sidebar({
             <div className="admin-access-title">Sesion admin activa</div>
             <div className="admin-access-copy">Ya puedes abrir y editar todas las pestañas.</div>
           </div>
-          <button type="button" className="btn btn-ghost btn-block" onClick={onAdminLogout}>Cerrar sesion</button>
+          <button type="button" className="btn btn-ghost btn-block" onClick={onAdminLogout}>Publicar y cerrar sesion</button>
         </div>
       )}
       <div className="sidebar-foot">

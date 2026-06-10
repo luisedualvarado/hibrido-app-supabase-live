@@ -387,6 +387,7 @@ export default function App() {
   const currentSnapshotJsonRef = useRef('')
   const lastDraftSnapshotJsonRef = useRef('')
   const pendingRemoteSnapshotJsonRef = useRef('')
+  const publishBeforeLogoutRef = useRef(null)
   const periodKey = periodKeyFor(year, month)
   const hasManualOffice93 = Object.prototype.hasOwnProperty.call(manualOffice93ByPeriod, periodKey)
   const manualOffice93 = hasManualOffice93 ? manualOffice93ByPeriod[periodKey] : EMPTY_ARRAY
@@ -417,7 +418,9 @@ export default function App() {
     return true
   }, [])
 
-  const handleAdminLogout = useCallback(() => {
+  const handleAdminLogout = useCallback(async () => {
+    const published = await publishBeforeLogoutRef.current?.()
+    if (published === false) return
     window.sessionStorage.removeItem(ADMIN_SESSION_KEY)
     setIsAdmin(false)
     setAuthError('')
@@ -755,7 +758,7 @@ export default function App() {
   }, [isAdmin])
 
   const handlePublishSnapshot = useCallback(async () => {
-    if (!LIVE_SYNC_ENABLED || !isAdmin) return
+    if (!LIVE_SYNC_ENABLED || !isAdmin) return true
 
     try {
       setLiveSyncStatus('publishing')
@@ -773,11 +776,17 @@ export default function App() {
       setLiveSyncPublishedAt(publishedResult?.updatedAt || new Date().toISOString())
       setLiveSyncStatus('published')
       await refreshLiveSyncHistory()
+      return true
     } catch (error) {
       setLiveSyncStatus('error')
       setLiveSyncError(error.message || 'No se pudo publicar el borrador actual.')
+      return false
     }
   }, [currentSnapshot, currentSnapshotJson, isAdmin, refreshLiveSyncHistory])
+
+  useEffect(() => {
+    publishBeforeLogoutRef.current = handlePublishSnapshot
+  }, [handlePublishSnapshot])
 
   const handleRestoreHistoryEntry = useCallback(async (entry) => {
     if (!LIVE_SYNC_ENABLED || !isAdmin || !entry?.snapshot) return
