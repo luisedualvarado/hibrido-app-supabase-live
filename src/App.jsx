@@ -17,7 +17,16 @@ import { assignOffice93ForMonth, applyOffice93Assignment } from './logic/locatio
 import { assignLockersForMonth } from './logic/lockerGenerator.js'
 import { buildDailySummary, validateSchedule, buildDashboardKPIs } from './logic/validators.js'
 import { MONTH_LABEL, isHoliday, isOddCalendarDay, isWeekend } from './logic/dateUtils.js'
-import { LIVE_SYNC_ENABLED, fetchLiveSnapshot, publishLiveSnapshot, subscribeToLiveSnapshot } from './logic/liveSnapshot.js'
+import {
+  LIVE_SYNC_DRAFT_KEY,
+  LIVE_SYNC_ENABLED,
+  LIVE_SYNC_PUBLISHED_KEY,
+  fetchSnapshotHistory,
+  fetchSnapshotRecord,
+  insertSnapshotHistory,
+  saveSnapshotRecord,
+  subscribeToSnapshot,
+} from './logic/liveSnapshot.js'
 
 const TITLES = {
   dashboard: 'Dashboard',
@@ -141,6 +150,7 @@ const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || ''
 const ADMIN_ACCESS_ENABLED = Boolean(ADMIN_USERNAME && ADMIN_PASSWORD)
 const INITIAL_EMPLOYEES_BY_ID = Object.fromEntries(initialEmployees.map((employee) => [employee.id, employee]))
 const LIVE_SYNC_DEBOUNCE_MS = 1200
+const LIVE_SYNC_HISTORY_LIMIT = 10
 
 function buildSavedWeekEntry(week) {
   return {
@@ -368,10 +378,15 @@ export default function App() {
   const [liveSyncReady, setLiveSyncReady] = useState(() => !LIVE_SYNC_ENABLED)
   const [liveSyncStatus, setLiveSyncStatus] = useState(() => LIVE_SYNC_ENABLED ? 'idle' : 'disabled')
   const [liveSyncError, setLiveSyncError] = useState('')
+  const [liveSyncDraftSavedAt, setLiveSyncDraftSavedAt] = useState('')
+  const [liveSyncPublishedAt, setLiveSyncPublishedAt] = useState('')
+  const [liveSyncHistory, setLiveSyncHistory] = useState([])
+  const [liveSyncHistoryLoading, setLiveSyncHistoryLoading] = useState(false)
+  const [liveSyncHistoryError, setLiveSyncHistoryError] = useState('')
   const [generationTick, setGenerationTick] = useState(0)
   const currentSnapshotJsonRef = useRef('')
-  const lastLiveSnapshotJsonRef = useRef('')
-  const pendingLiveSnapshotJsonRef = useRef('')
+  const lastDraftSnapshotJsonRef = useRef('')
+  const pendingRemoteSnapshotJsonRef = useRef('')
   const periodKey = periodKeyFor(year, month)
   const hasManualOffice93 = Object.prototype.hasOwnProperty.call(manualOffice93ByPeriod, periodKey)
   const manualOffice93 = hasManualOffice93 ? manualOffice93ByPeriod[periodKey] : EMPTY_ARRAY
@@ -715,6 +730,78 @@ export default function App() {
     if (ok) importSnapshot(backup)
   }
 
+  const refreshLiveSyncHistory = useCallback(async () => {
+    if (!LIVE_SYNC_ENABLED || !isAdmin) {
+      setLiveSyncHistory([])
+      setLiveSyncHistoryError('')
+      setLiveSyncHistoryLoading(false)
+      return []
+    }
+
+    setLiveSyncHistoryLoading(true)
+    setLiveSyncHistoryError('')
+    try {
+      const entries = await fetchSnapshotHistory(LIVE_SYNC_HISTORY_LIMIT, LIVE_SYNC_PUBLISHED_KEY)
+      setLiveSyncHistory(entries)
+      if (entries[0]?.created_at) setLiveSyncPublishedAt(entries[0].created_at)
+      return entries
+    } catch (error) {
+      setLiveSyncHistoryError(error.message || 'No se pudo cargar el historial de publicaciones.')
+      return []
+    } finally {
+      setLiveSyncHistoryLoading(false)
+    }
+  }, [isAdmin])
+
+  const handlePublishSnapshot = useCallback(async () => {
+    if (!LIVE_SYNC_ENABLED || !isAdmin) return
+
+    try {
+      setLiveSyncStatus('publishing')
+      setLiveSyncError('')
+
+      const [draftResult, publishedResult] = await Promise.all([
+        saveSnapshotRecord(LIVE_SYNC_DRAFT_KEY, currentSnapshot),
+        saveSnapshotRecord(LIVE_SYNC_PUBLISHED_KEY, currentSnapshot),
+      ])
+
+      await insertSnapshotHistory(currentSnapshot, LIVE_SYNC_PUBLISHED_KEY)
+
+      lastDraftSnapshotJsonRef.current = currentSnapshotJson
+      setLiveSyncDraftSavedAt(draftResult?.updatedAt || new Date().toISOString())
+      setLiveSyncPublishedAt(publishedResult?.updatedAt || new Date().toISOString())
+      setLiveSyncStatus('published')
+      await refreshLiveSyncHistory()
+    } catch (error) {
+      setLiveSyncStatus('error')
+      setLiveSyncError(error.message || 'No se pudo publicar el borrador actual.')
+    }
+  }, [currentSnapshot, currentSnapshotJson, isAdmin, refreshLiveSyncHistory])
+
+  const handleRestoreHistoryEntry = useCallback(async (entry) => {
+    if (!LIVE_SYNC_ENABLED || !isAdmin || !entry?.snapshot) return
+
+    const publishedAt = entry.created_at ? new Date(entry.created_at).toLocaleString('es-CO') : 'esa version'
+    const ok = window.confirm(`Cargar al borrador la publicacion del ${publishedAt}? El publico no cambiara hasta que vuelvas a publicar.`)
+    if (!ok) return
+
+    try {
+      setLiveSyncStatus('saving-draft')
+      setLiveSyncError('')
+
+      const nextJson = JSON.stringify(entry.snapshot)
+      const draftResult = await saveSnapshotRecord(LIVE_SYNC_DRAFT_KEY, entry.snapshot)
+
+      lastDraftSnapshotJsonRef.current = nextJson
+      setLiveSyncDraftSavedAt(draftResult?.updatedAt || new Date().toISOString())
+      importSnapshot(entry.snapshot)
+      setLiveSyncStatus('draft-saved')
+    } catch (error) {
+      setLiveSyncStatus('error')
+      setLiveSyncError(error.message || 'No se pudo cargar la version seleccionada al borrador.')
+    }
+  }, [importSnapshot, isAdmin])
+
   useEffect(() => {
     if (LIVE_SYNC_ENABLED || !PUBLIC_READ_ONLY || !isAdmin || didHydrateStoredState) return
     if (!stored.employees?.length) {
@@ -739,19 +826,25 @@ export default function App() {
     }
 
     let cancelled = false
+    const activeKey = isAdmin ? LIVE_SYNC_DRAFT_KEY : LIVE_SYNC_PUBLISHED_KEY
+    const readyStatus = isAdmin ? 'draft-saved' : 'ready'
 
-    const acceptRemoteSnapshot = (snapshot) => {
+    const acceptRemoteSnapshot = (snapshot, options = {}) => {
       const nextJson = JSON.stringify(snapshot)
-      lastLiveSnapshotJsonRef.current = nextJson
+      if (activeKey === LIVE_SYNC_DRAFT_KEY) lastDraftSnapshotJsonRef.current = nextJson
+      if (options.updatedAt) {
+        if (activeKey === LIVE_SYNC_DRAFT_KEY) setLiveSyncDraftSavedAt(options.updatedAt)
+        else setLiveSyncPublishedAt(options.updatedAt)
+      }
       if (currentSnapshotJsonRef.current === nextJson) {
-        pendingLiveSnapshotJsonRef.current = ''
+        pendingRemoteSnapshotJsonRef.current = ''
         setLiveSyncReady(true)
-        setLiveSyncStatus('ready')
+        setLiveSyncStatus(readyStatus)
         setLiveSyncError('')
         return
       }
 
-      pendingLiveSnapshotJsonRef.current = nextJson
+      pendingRemoteSnapshotJsonRef.current = nextJson
       importSnapshot(snapshot, { resetView: false })
     }
 
@@ -759,13 +852,38 @@ export default function App() {
     setLiveSyncStatus('connecting')
     setLiveSyncError('')
 
-    fetchLiveSnapshot()
-      .then((snapshot) => {
+    Promise.all([
+      isAdmin ? fetchSnapshotRecord(LIVE_SYNC_DRAFT_KEY) : Promise.resolve(null),
+      fetchSnapshotRecord(LIVE_SYNC_PUBLISHED_KEY),
+    ])
+      .then(async ([draftRow, publishedRow]) => {
         if (cancelled) return
-        if (snapshot) {
-          acceptRemoteSnapshot(snapshot)
+
+        if (publishedRow?.updatedAt) setLiveSyncPublishedAt(publishedRow.updatedAt)
+
+        if (isAdmin) {
+          if (draftRow?.snapshot) {
+            acceptRemoteSnapshot(draftRow.snapshot, { updatedAt: draftRow.updatedAt })
+          } else if (publishedRow?.snapshot) {
+            acceptRemoteSnapshot(publishedRow.snapshot, { updatedAt: publishedRow.updatedAt })
+            const seededDraft = await saveSnapshotRecord(LIVE_SYNC_DRAFT_KEY, publishedRow.snapshot)
+            if (cancelled) return
+            lastDraftSnapshotJsonRef.current = JSON.stringify(publishedRow.snapshot)
+            setLiveSyncDraftSavedAt(seededDraft?.updatedAt || publishedRow.updatedAt || '')
+            setLiveSyncStatus('draft-saved')
+          } else {
+            setLiveSyncReady(true)
+            setLiveSyncStatus('ready')
+          }
+          await refreshLiveSyncHistory()
           return
         }
+
+        if (publishedRow?.snapshot) {
+          acceptRemoteSnapshot(publishedRow.snapshot, { updatedAt: publishedRow.updatedAt })
+          return
+        }
+
         setLiveSyncReady(true)
         setLiveSyncStatus('ready')
       })
@@ -776,7 +894,8 @@ export default function App() {
         setLiveSyncError(error.message || 'No se pudo cargar la vista compartida.')
       })
 
-    const unsubscribe = subscribeToLiveSnapshot(
+    const unsubscribe = subscribeToSnapshot(
+      activeKey,
       (snapshot) => {
         if (cancelled || !snapshot) return
         acceptRemoteSnapshot(snapshot)
@@ -792,18 +911,18 @@ export default function App() {
       cancelled = true
       unsubscribe()
     }
-  }, [importSnapshot, isAdmin, isReadOnly])
+  }, [importSnapshot, isAdmin, isReadOnly, refreshLiveSyncHistory])
 
   useEffect(() => {
     if (!LIVE_SYNC_ENABLED) return
-    if (!pendingLiveSnapshotJsonRef.current) return
-    if (currentSnapshotJson !== pendingLiveSnapshotJsonRef.current) return
+    if (!pendingRemoteSnapshotJsonRef.current) return
+    if (currentSnapshotJson !== pendingRemoteSnapshotJsonRef.current) return
 
-    pendingLiveSnapshotJsonRef.current = ''
+    pendingRemoteSnapshotJsonRef.current = ''
     setLiveSyncReady(true)
-    setLiveSyncStatus('ready')
+    setLiveSyncStatus(isAdmin ? 'draft-saved' : 'ready')
     setLiveSyncError('')
-  }, [currentSnapshotJson])
+  }, [currentSnapshotJson, isAdmin])
 
   useEffect(() => {
     if (isReadOnly) return
@@ -815,20 +934,21 @@ export default function App() {
 
   useEffect(() => {
     if (!LIVE_SYNC_ENABLED || isReadOnly || !isAdmin || !liveSyncReady) return undefined
-    if (currentSnapshotJson === lastLiveSnapshotJsonRef.current) return undefined
+    if (currentSnapshotJson === lastDraftSnapshotJsonRef.current) return undefined
 
-    setLiveSyncStatus('publishing')
+    setLiveSyncStatus('saving-draft')
     setLiveSyncError('')
 
     const timerId = window.setTimeout(() => {
-      publishLiveSnapshot(currentSnapshot)
+      saveSnapshotRecord(LIVE_SYNC_DRAFT_KEY, currentSnapshot)
         .then(() => {
-          lastLiveSnapshotJsonRef.current = currentSnapshotJson
-          setLiveSyncStatus('synced')
+          lastDraftSnapshotJsonRef.current = currentSnapshotJson
+          setLiveSyncDraftSavedAt(new Date().toISOString())
+          setLiveSyncStatus('draft-saved')
         })
         .catch((error) => {
           setLiveSyncStatus('error')
-          setLiveSyncError(error.message || 'No se pudo publicar la vista compartida.')
+          setLiveSyncError(error.message || 'No se pudo guardar el borrador compartido.')
         })
     }, LIVE_SYNC_DEBOUNCE_MS)
 
@@ -983,8 +1103,16 @@ export default function App() {
               liveSyncEnabled={LIVE_SYNC_ENABLED}
               liveSyncStatus={liveSyncStatus}
               liveSyncError={liveSyncError}
+              liveSyncDraftSavedAt={liveSyncDraftSavedAt}
+              liveSyncPublishedAt={liveSyncPublishedAt}
+              liveSyncHistory={liveSyncHistory}
+              liveSyncHistoryLoading={liveSyncHistoryLoading}
+              liveSyncHistoryError={liveSyncHistoryError}
+              onPublish={handlePublishSnapshot}
+              onRestoreHistoryEntry={handleRestoreHistoryEntry}
               onImport={importSnapshot}
               onRestoreBackup={restoreBackup}
+              isAdmin={isAdmin}
             />
           )}
         </main>

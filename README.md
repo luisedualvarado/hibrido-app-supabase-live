@@ -23,7 +23,8 @@ Esta copia puede trabajar con dos vistas separadas:
 2. Público: entra en modo solo lectura.
 
 Cuando configuras Supabase, cualquier cambio del admin se publica en una
-snapshot compartida y la vista pública la recibe casi en tiempo real.
+snapshot de borrador. La vista publica solo cambia cuando el admin presiona
+**Publicar**, y cada publicacion queda guardada en un historial recuperable.
 
 ### Variables de entorno
 
@@ -37,14 +38,22 @@ VITE_ADMIN_PASSWORD=tu_password_admin
 VITE_SUPABASE_URL=tu_supabase_url
 VITE_SUPABASE_ANON_KEY=tu_supabase_anon_key
 VITE_SUPABASE_SNAPSHOT_TABLE=app_snapshots
-VITE_SUPABASE_SNAPSHOT_KEY=public
+VITE_SUPABASE_DRAFT_KEY=draft
+VITE_SUPABASE_PUBLISHED_KEY=public
+VITE_SUPABASE_HISTORY_TABLE=app_snapshot_history
 ```
 
 ### Tabla de Supabase
 
 Ejecuta el SQL de [supabase/app_snapshots.sql](supabase/app_snapshots.sql) en tu
-proyecto de Supabase. Ese script crea la tabla `app_snapshots` y deja un
-registro base con la clave `public`.
+proyecto de Supabase. Ese script crea:
+
+- `app_snapshots` para las filas `draft` y `public`
+- `app_snapshot_history` para guardar cada publicacion
+
+La vista admin trabaja sobre `draft`. La vista publica escucha `public`.
+Cuando publicas, el borrador actual se copia a `public` y se agrega una entrada
+en el historial.
 
 ### Importante sobre seguridad
 

@@ -547,17 +547,42 @@ export function Settings({ params, setParams }) {
 }
 
 /* ---------------- Export / Import ---------------- */
-export function ExportPanel({ buildSnapshot, schedule, employees, summary, alerts, liveSyncEnabled, liveSyncStatus, liveSyncError, onImport, onRestoreBackup }) {
+export function ExportPanel({
+  buildSnapshot,
+  schedule,
+  employees,
+  summary,
+  alerts,
+  liveSyncEnabled,
+  liveSyncStatus,
+  liveSyncError,
+  liveSyncDraftSavedAt,
+  liveSyncPublishedAt,
+  liveSyncHistory,
+  liveSyncHistoryLoading,
+  liveSyncHistoryError,
+  onPublish,
+  onRestoreHistoryEntry,
+  onImport,
+  onRestoreBackup,
+  isAdmin,
+}) {
   const fileRef = React.useRef()
   const liveSyncLabel = {
     disabled: 'Sincronizacion no configurada',
     idle: 'Esperando vista admin o publica',
     connecting: 'Conectando con Supabase',
     ready: 'Sincronizacion lista',
-    publishing: 'Publicando cambios del admin',
-    synced: 'Publico actualizado',
+    'saving-draft': 'Guardando borrador',
+    'draft-saved': 'Borrador guardado',
+    publishing: 'Publicando cambios al publico',
+    published: 'Publico actualizado',
     error: 'Error de sincronizacion',
   }[liveSyncStatus] || 'Sincronizacion no disponible'
+  const formatDateTime = (value) => {
+    if (!value) return 'Aun no disponible'
+    return new Date(value).toLocaleString('es-CO')
+  }
   const doImport = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -588,17 +613,61 @@ export function ExportPanel({ buildSnapshot, schedule, employees, summary, alert
         </div>
       </div>
       <div className="card">
-        <div className="card-head"><h3>Sincronizacion admin / publico</h3></div>
+        <div className="card-head"><h3>Borrador y publicacion</h3></div>
         <div className="card-body">
           <div className={`badge ${liveSyncStatus === 'error' ? 'red' : liveSyncEnabled ? 'green' : 'gray'}`} style={{ marginBottom: 10 }}>{liveSyncLabel}</div>
           <p className="muted" style={{ marginTop: 0 }}>
             {liveSyncEnabled
-              ? 'La app usara Supabase para que el publico refleje automaticamente los cambios del admin en otros dispositivos.'
+              ? isAdmin
+                ? 'Los cambios del admin se guardan automaticamente como borrador. El publico solo cambia cuando presionas Publicar.'
+                : 'Esta vista publica solo escucha la version publicada en Supabase.'
               : 'Faltan variables de Supabase en el entorno. Mientras tanto, la app sigue funcionando solo con almacenamiento local.'}
           </p>
+          {liveSyncEnabled && isAdmin && (
+            <>
+              <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>Ultimo borrador guardado: {formatDateTime(liveSyncDraftSavedAt)}</div>
+              <div className="muted" style={{ fontSize: 12, marginBottom: 12 }}>Ultima publicacion: {formatDateTime(liveSyncPublishedAt)}</div>
+              <button className="btn btn-green" onClick={onPublish}>Publicar borrador al publico</button>
+            </>
+          )}
           {liveSyncError && <div className="admin-access-error">{liveSyncError}</div>}
         </div>
       </div>
+      {liveSyncEnabled && isAdmin && (
+        <div className="card">
+          <div className="card-head"><h3>Historial de publicaciones</h3></div>
+          <div className="card-body">
+            <p className="muted" style={{ marginTop: 0 }}>Cada publicacion crea una version recuperable. Puedes cargarla de nuevo al borrador antes de volver a publicarla.</p>
+            {liveSyncHistoryLoading && <div className="muted">Cargando historial...</div>}
+            {liveSyncHistoryError && <div className="admin-access-error">{liveSyncHistoryError}</div>}
+            {!liveSyncHistoryLoading && !liveSyncHistory.length && !liveSyncHistoryError && <div className="empty">Aun no hay publicaciones guardadas.</div>}
+            {liveSyncHistory.length > 0 && (
+              <div className="tbl-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Publicado</th>
+                      <th>Periodo</th>
+                      <th>Personas</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {liveSyncHistory.map((entry) => (
+                      <tr key={entry.id}>
+                        <td>{formatDateTime(entry.created_at)}</td>
+                        <td>{MONTH_LABEL[entry.snapshot?.month] || '-'} {entry.snapshot?.year || ''}</td>
+                        <td>{entry.snapshot?.employees?.length || 0}</td>
+                        <td><button className="btn btn-sm btn-ghost" onClick={() => onRestoreHistoryEntry(entry)}>Cargar al borrador</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
