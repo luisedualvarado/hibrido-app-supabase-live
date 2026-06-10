@@ -1029,3 +1029,10 @@ tr:hover td { background: var(--gray-50); }
     grid-template-columns: 24px minmax(0, 1fr) 24px;
   }
 }
+
+@media print {
+  .sidebar, .topbar-actions, .filters, button { display: none !important; }
+  .main, .content { margin: 0 !important; padding: 0 !important; }
+  .topbar { position: static; box-shadow: none; }
+  .matrix-wrap, .tbl-wrap { max-height: none !important; overflow: visible !important; }
+}

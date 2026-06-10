@@ -1,6 +1,7 @@
 // parkingGenerator.js — asignación mensual de parqueaderos por rotación.
 import { weekdayKey } from './dateUtils.js'
 import { PHYSICAL_SEATS_BY_LOCATION } from './deskLayouts.js'
+import { hasHardRestriction, isDateAllowedForEmployee, isRotationEligible, weeklyHomeTarget } from './rotationPolicy.js'
 
 const BLOCKED_FLOATING_SEATS_BY_LOCATION = {
   WEWORK: new Set(['3']),
@@ -266,8 +267,27 @@ export function applyManualOverrides(schedule, manualOverrides, employees = [], 
     if (!cells[key]) continue
     if (['VACATION', 'ABSENCE', 'HOLIDAY'].includes(cells[key].status)) continue
     const employee = employeesById[ov.employeeId]
-    if (ov.status === 'HOME' && employee && (!employee.isActive || !employee.hybridApproved || employee.baseLocation === 'REMOTO')) {
-      continue
+    if (ov.status === 'HOME' && employee) {
+      const week = schedule.weeks?.find((item) => item.workdays.includes(ov.date))
+      const currentStatus = cells[key].status
+      const homeDays = week?.workdays.filter((date) => cells[`${employee.id}__${date}`]?.status === 'HOME').length || 0
+      const projectedHomeDays = homeDays + (currentStatus === 'HOME' ? 0 : 1)
+      let message = ''
+      let rule = ''
+      if (!isRotationEligible(employee)) {
+        message = `${employee.name}: ajuste a TC no aplicado porque no tiene plan hibrido aprobado.`
+        rule = 'MANUAL_HOME_NOT_APPROVED'
+      } else if (hasHardRestriction(employee) && !isDateAllowedForEmployee(employee, ov.date)) {
+        message = `${employee.name}: ajuste a TC no aplicado porque rompe su restriccion.`
+        rule = 'MANUAL_HOME_RESTRICTION'
+      } else if (!week || projectedHomeDays > weeklyHomeTarget(employee)) {
+        message = `${employee.name}: ajuste a TC no aplicado porque supera sus dias TC semanales.`
+        rule = 'MANUAL_HOME_LIMIT'
+      }
+      if (message) {
+        alerts.push({ id: `${rule}-${alerts.length}`, severity: 'CRITICAL', date: ov.date, employeeId: ov.employeeId, message, rule })
+        continue
+      }
     }
     if (ov.status === 'OFFICE' && employee && ['WEWORK', 'OFICINA_93'].includes(employee.baseLocation)) {
       const seats = Number(employee.baseLocation === 'OFICINA_93' ? params.seats93 : params.seatsWeWork) || 0

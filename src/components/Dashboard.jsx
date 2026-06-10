@@ -123,8 +123,6 @@ export default function Dashboard({
           tone={kpis.overCapacityDays > 0 ? 'red' : 'green'} />
         <KpiCard label="Dias sin sobrecupo" value={pct(seatedRate)}
           hint={`${seatedDays}/${workdayCount} dias`} tone={seatedRate >= 95 ? 'green' : 'amber'} />
-        <KpiCard label="Dias con sobrecupo" value={kpis.offTargetDays}
-          tone={kpis.offTargetDays > 0 ? 'red' : 'green'} />
         <KpiCard label="Parqueaderos" value={`${kpis.parkingAssigned}/${kpis.parkingAvailable}`}
           hint={kpis.carsNoParking > 0 ? `${kpis.carsNoParking} con carro sin cupo` : 'asignados'} />
         {!hideAlerts && (

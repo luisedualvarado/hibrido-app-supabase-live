@@ -1,21 +1,5 @@
 import { isWeekend, isHoliday, weekdayKey, WEEKDAY_LABEL, getWorkdaysByWeek } from './dateUtils.js'
-import { getAllowedDatesForEmployee } from './scheduleGenerator.js'
-
-const SHARED_DESK_PAIR = {
-  first: 'camargo-jessel',
-  second: 'cardenas-jaime',
-}
-
-function expectedSharedDeskHomeDays(employeeId, weekIndex, sharedOfficeDaysCount) {
-  if (employeeId !== SHARED_DESK_PAIR.first && employeeId !== SHARED_DESK_PAIR.second) return null
-  const firstGetsExtraDay = weekIndex % 2 === 0
-  if (employeeId === SHARED_DESK_PAIR.first) {
-    return firstGetsExtraDay
-      ? Math.ceil(sharedOfficeDaysCount / 2)
-      : Math.floor(sharedOfficeDaysCount / 2)
-  }
-  return sharedOfficeDaysCount - expectedSharedDeskHomeDays(SHARED_DESK_PAIR.first, weekIndex, sharedOfficeDaysCount)
-}
+import { getAllowedDatesForEmployee, isRotationEligible, weeklyHomeTarget } from './rotationPolicy.js'
 
 function restrictionApplies(employee) {
   return employee.restrictionEnabled !== false &&
@@ -113,7 +97,7 @@ export function validateSchedule(schedule, employees, year, month, holidays) {
   const add = (severity, message, rule, extra = {}) =>
     alerts.push({ id: `${rule}-${alerts.length}`, severity, message, rule, ...extra })
   const weeks = getWorkdaysByWeek(year, month, holidays)
-  const eligible = employees.filter((employee) => employee.isActive && employee.hybridApproved)
+  const eligible = employees.filter(isRotationEligible)
 
   for (const employee of eligible) {
     let prevWeekday = null
@@ -123,15 +107,7 @@ export function validateSchedule(schedule, employees, year, month, holidays) {
       if (week.workdays.length === 0) return
 
       const homeDays = week.workdays.filter((iso) => schedule.cells[`${employee.id}__${iso}`]?.status === 'HOME')
-      const sharedOfficeDaysCount = week.workdays.filter((iso) => {
-        const firstCell = schedule.cells[`${SHARED_DESK_PAIR.first}__${iso}`]
-        const secondCell = schedule.cells[`${SHARED_DESK_PAIR.second}__${iso}`]
-        const firstOperational = firstCell?.status === 'OFFICE' || firstCell?.status === 'HOME'
-        const secondOperational = secondCell?.status === 'OFFICE' || secondCell?.status === 'HOME'
-        return firstOperational && secondOperational
-      }).length
-      const sharedDeskExpected = expectedSharedDeskHomeDays(employee.id, weekIndex, sharedOfficeDaysCount)
-      const expectedHomeDays = sharedDeskExpected ?? (employee.doubleHomeConsecutive ? 2 : 1)
+      const expectedHomeDays = weeklyHomeTarget(employee)
       const allowedHomeDays = new Set(getAllowedDatesForEmployee(employee, week.workdays))
 
       if (homeDays.length === 0) {
@@ -140,8 +116,6 @@ export function validateSchedule(schedule, employees, year, month, holidays) {
         }
       } else if (homeDays.length > expectedHomeDays) {
         add('WARNING', `${employee.name}: mas de ${expectedHomeDays} dia(s) de trabajo en casa en una semana.`, 'EXTRA_HOME_WEEK', { employeeId: employee.id })
-      } else if (sharedDeskExpected !== null && homeDays.length !== expectedHomeDays) {
-        add('WARNING', `${employee.name}: no cumple la alternancia esperada de ${expectedHomeDays} dia(s) TC para su puesto compartido.`, 'SHARED_DESK_ALTERNATION', { employeeId: employee.id })
       } else if (employee.doubleHomeConsecutive && homeDays.length === 1) {
         add('WARNING', `${employee.name}: solo tiene un dia de TC; esperaba dos dias.`, 'MISSING_DOUBLE_HOME_WEEK', { employeeId: employee.id })
       }

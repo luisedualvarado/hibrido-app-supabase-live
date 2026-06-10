@@ -58,10 +58,10 @@ export function Sidebar({
     ? NAV.filter(([id]) => ['dashboard', 'monthly', 'daily', 'desks', 'lockers'].includes(id))
     : NAV
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
     if (!onAdminLogin) return
-    const ok = onAdminLogin(username, password)
+    const ok = await onAdminLogin(username, password)
     if (ok) {
       setUsername('')
       setPassword('')
@@ -86,7 +86,7 @@ export function Sidebar({
           <div className="admin-access-head">
             <div className="admin-access-kicker">Admin</div>
             <div className="admin-access-title">Acceso admin</div>
-            <div className="admin-access-copy">Desbloquea edicion, configuracion y paneles internos.</div>
+            <div className="admin-access-copy">Acceso para el unico administrador. Desbloquea edicion y paneles internos.</div>
           </div>
           <div className="admin-access-field">
             <label htmlFor="admin-username">Usuario</label>
@@ -95,7 +95,7 @@ export function Sidebar({
               type="text"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
-              placeholder="admin"
+              placeholder="admin o correo"
               autoComplete="username"
             />
           </div>
