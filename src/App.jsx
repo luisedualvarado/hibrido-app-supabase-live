@@ -404,8 +404,9 @@ export default function App() {
       return false
     }
 
-    const normalizedUsername = username.trim()
-    if (normalizedUsername !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
+    const normalizedUsername = username.trim().toLowerCase()
+    const normalizedPassword = password.trim()
+    if (normalizedUsername !== ADMIN_USERNAME.trim().toLowerCase() || normalizedPassword !== ADMIN_PASSWORD.trim()) {
       setAuthError('Credenciales admin invalidas.')
       return false
     }

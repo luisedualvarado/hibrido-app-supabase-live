@@ -54,6 +54,7 @@ export function Sidebar({
 }) {
   const [username, setUsername] = React.useState('')
   const [password, setPassword] = React.useState('')
+  const [showPassword, setShowPassword] = React.useState(false)
   const navItems = readOnly
     ? NAV.filter(([id]) => ['dashboard', 'monthly', 'daily', 'desks', 'lockers'].includes(id))
     : NAV
@@ -95,7 +96,7 @@ export function Sidebar({
               type="text"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
-              placeholder="admin o correo"
+              placeholder="admin"
               autoComplete="username"
             />
           </div>
@@ -103,12 +104,20 @@ export function Sidebar({
             <label htmlFor="admin-password">Contrasena</label>
             <input
               id="admin-password"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               placeholder="Ingresa la contrasena"
               autoComplete="current-password"
             />
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              style={{ marginTop: 8 }}
+              onClick={() => setShowPassword((current) => !current)}
+            >
+              {showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}
+            </button>
           </div>
           {authError && <div className="admin-access-error">{authError}</div>}
           <button type="submit" className="btn btn-primary btn-block admin-access-submit">Entrar como admin</button>
