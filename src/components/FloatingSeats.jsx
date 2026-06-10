@@ -150,14 +150,17 @@ export default function FloatingSeats({ schedule, employees, floatingResult, mon
 
   const filtered = useMemo(() => {
     const eligibleEmployees = employees.filter(isEligibleFloater)
+    const presetEmployeeIds = new Set(
+      deskPreset ? LOCATIONS.flatMap(([location]) => deskPreset[location] || []) : []
+    )
     const baseEmployees = deskPreset
       ? [
           ...LOCATIONS.flatMap(([location]) => (deskPreset[location] || []).map((employeeId) => employeesById[employeeId]).filter(isEligibleFloater)),
-          ...eligibleEmployees.filter((employee) => !(deskPreset[employee.baseLocation] || []).includes(employee.id)),
+          ...eligibleEmployees.filter((employee) => !presetEmployeeIds.has(employee.id)),
         ]
       : eligibleEmployees
 
-    return baseEmployees
+    return Array.from(new Map(baseEmployees.map((employee) => [employee.id, employee])).values())
       .filter((employee) => !search || employee.name.toLowerCase().includes(search.toLowerCase()))
       .filter((employee) => loc === 'ALL' || employee.baseLocation === loc)
       .sort(byName)
