@@ -8,6 +8,16 @@ export function isFloatingSeatEligible(employee) {
   return Boolean(employee?.isFloating && employee?.isActive && employee?.baseLocation !== 'REMOTO')
 }
 
+export function buildFloatingSeatEmployees(employees, preferredIds = []) {
+  const eligibleById = new Map(
+    employees.filter(isFloatingSeatEligible).map((employee) => [employee.id, employee])
+  )
+  const preferredIdSet = new Set(preferredIds)
+  const ordered = Array.from(preferredIdSet).map((id) => eligibleById.get(id)).filter(Boolean)
+  const remaining = Array.from(eligibleById.values()).filter((employee) => !preferredIdSet.has(employee.id))
+  return [...ordered, ...remaining]
+}
+
 export function weeklyHomeTarget(employee) {
   return isRotationEligible(employee) ? (employee.doubleHomeConsecutive ? 2 : 1) : 0
 }

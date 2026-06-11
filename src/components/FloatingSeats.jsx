@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { isWeekend, WEEKDAY_LABEL, weekdayKey, dayOfMonth } from '../logic/dateUtils.js'
-import { isFloatingSeatEligible } from '../logic/rotationPolicy.js'
+import { buildFloatingSeatEmployees } from '../logic/rotationPolicy.js'
 
 const LOCATIONS = [
   ['WEWORK', 'WeWork'],
@@ -142,26 +142,19 @@ function deskCellClassName(cell) {
 export default function FloatingSeats({ schedule, employees, floatingResult, month, year }) {
   const [search, setSearch] = useState('')
   const [loc, setLoc] = useState('ALL')
-  const employeesById = useMemo(() => Object.fromEntries(employees.map((employee) => [employee.id, employee])), [employees])
   const deskPreset = month === 5 && year === 2026 ? JUNE_2026_DESK_PRESET : null
 
   const filtered = useMemo(() => {
-    const eligibleEmployees = employees.filter(isFloatingSeatEligible)
-    const presetEmployeeIds = new Set(
-      deskPreset ? LOCATIONS.flatMap(([location]) => deskPreset[location] || []) : []
-    )
-    const baseEmployees = deskPreset
-      ? [
-          ...LOCATIONS.flatMap(([location]) => (deskPreset[location] || []).map((employeeId) => employeesById[employeeId]).filter(isFloatingSeatEligible)),
-          ...eligibleEmployees.filter((employee) => !presetEmployeeIds.has(employee.id)),
-        ]
-      : eligibleEmployees
+    const presetEmployeeIds = deskPreset
+      ? LOCATIONS.flatMap(([location]) => deskPreset[location] || [])
+      : []
+    const baseEmployees = buildFloatingSeatEmployees(employees, presetEmployeeIds)
 
-    return Array.from(new Map(baseEmployees.map((employee) => [employee.id, employee])).values())
+    return baseEmployees
       .filter((employee) => !search || employee.name.toLowerCase().includes(search.toLowerCase()))
       .filter((employee) => loc === 'ALL' || employee.baseLocation === loc)
       .sort(byName)
-  }, [deskPreset, employees, employeesById, loc, search])
+  }, [deskPreset, employees, loc, search])
 
   if (!schedule?.days?.length) return <div className="empty">No hay dias disponibles para mostrar puestos.</div>
 

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { generateMonthlySchedule, enforceNoOfficeOvercapacity, enforceRotationPolicy } from './scheduleGenerator.js'
 import { applyManualOverrides, assignFloatingSeats } from './parkingGenerator.js'
 import { getWorkdaysByWeek, weekdayKey } from './dateUtils.js'
+import { buildFloatingSeatEmployees } from './rotationPolicy.js'
 
 const params = { seatsWeWork: 20, seats93: 10, parkingSpots: 3, lockers: 36 }
 
@@ -55,6 +56,14 @@ test('active floaters without hybrid approval still receive an office seat', () 
 
   assert.equal(schedule.cells[`${floater.id}__${date}`].status, 'OFFICE')
   assert.equal(result[date].assignedByEmp[floater.id]?.location, 'WEWORK')
+})
+
+test('floating list includes Ana and German once even without hybrid approval', () => {
+  const ana = employee('gallo-ana-maria', { isFloating: true, hybridApproved: true })
+  const german = employee('cortes-german', { isFloating: true, hybridApproved: false })
+  const list = buildFloatingSeatEmployees([ana, german], ['cortes-german', 'gallo-ana-maria', 'cortes-german'])
+
+  assert.deepEqual(list.map((item) => item.id), ['cortes-german', 'gallo-ana-maria'])
 })
 
 test('hard restrictions are respected', () => {
