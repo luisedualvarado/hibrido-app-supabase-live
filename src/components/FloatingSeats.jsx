@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { isWeekend, WEEKDAY_LABEL, weekdayKey, dayOfMonth } from '../logic/dateUtils.js'
+import { isFloatingSeatEligible } from '../logic/rotationPolicy.js'
 
 const LOCATIONS = [
   ['WEWORK', 'WeWork'],
@@ -111,10 +112,6 @@ const PRESET_TONE_BY_LABEL = {
 
 const byName = (a, b) => a.name.localeCompare(b.name, 'es')
 
-function isEligibleFloater(employee) {
-  return employee?.isFloating && employee.isActive && employee.hybridApproved
-}
-
 function resolveDeskCell(employee, iso, schedule, floatingResult, location, presetLabels = null) {
   const presetLabel = presetLabels?.[`${employee.id}__${iso}`]
   if (presetLabel) {
@@ -149,13 +146,13 @@ export default function FloatingSeats({ schedule, employees, floatingResult, mon
   const deskPreset = month === 5 && year === 2026 ? JUNE_2026_DESK_PRESET : null
 
   const filtered = useMemo(() => {
-    const eligibleEmployees = employees.filter(isEligibleFloater)
+    const eligibleEmployees = employees.filter(isFloatingSeatEligible)
     const presetEmployeeIds = new Set(
       deskPreset ? LOCATIONS.flatMap(([location]) => deskPreset[location] || []) : []
     )
     const baseEmployees = deskPreset
       ? [
-          ...LOCATIONS.flatMap(([location]) => (deskPreset[location] || []).map((employeeId) => employeesById[employeeId]).filter(isEligibleFloater)),
+          ...LOCATIONS.flatMap(([location]) => (deskPreset[location] || []).map((employeeId) => employeesById[employeeId]).filter(isFloatingSeatEligible)),
           ...eligibleEmployees.filter((employee) => !presetEmployeeIds.has(employee.id)),
         ]
       : eligibleEmployees

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { generateMonthlySchedule, enforceNoOfficeOvercapacity, enforceRotationPolicy } from './scheduleGenerator.js'
-import { applyManualOverrides } from './parkingGenerator.js'
+import { applyManualOverrides, assignFloatingSeats } from './parkingGenerator.js'
 import { getWorkdaysByWeek, weekdayKey } from './dateUtils.js'
 
 const params = { seatsWeWork: 20, seats93: 10, parkingSpots: 3, lockers: 36 }
@@ -45,6 +45,16 @@ test('only approved employees receive TC', () => {
 
   assert.ok(schedule.days.some((date) => schedule.cells[`approved__${date}`]?.status === 'HOME'))
   assert.equal(schedule.days.some((date) => schedule.cells[`not-approved__${date}`]?.status === 'HOME'), false)
+})
+
+test('active floaters without hybrid approval still receive an office seat', () => {
+  const floater = employee('ana-gallo', { isFloating: true, hybridApproved: false })
+  const schedule = generate([floater])
+  const date = schedule.weeks[0].workdays[0]
+  const { result } = assignFloatingSeats(schedule, [floater], [date], params)
+
+  assert.equal(schedule.cells[`${floater.id}__${date}`].status, 'OFFICE')
+  assert.equal(result[date].assignedByEmp[floater.id]?.location, 'WEWORK')
 })
 
 test('hard restrictions are respected', () => {

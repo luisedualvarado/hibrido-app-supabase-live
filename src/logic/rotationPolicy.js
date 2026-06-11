@@ -4,6 +4,10 @@ export function isRotationEligible(employee) {
   return Boolean(employee?.isActive && employee?.hybridApproved && employee?.baseLocation !== 'REMOTO')
 }
 
+export function isFloatingSeatEligible(employee) {
+  return Boolean(employee?.isFloating && employee?.isActive && employee?.baseLocation !== 'REMOTO')
+}
+
 export function weeklyHomeTarget(employee) {
   return isRotationEligible(employee) ? (employee.doubleHomeConsecutive ? 2 : 1) : 0
 }

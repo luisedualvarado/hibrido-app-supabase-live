@@ -1,7 +1,7 @@
 // parkingGenerator.js — asignación mensual de parqueaderos por rotación.
 import { weekdayKey } from './dateUtils.js'
 import { PHYSICAL_SEATS_BY_LOCATION } from './deskLayouts.js'
-import { hasHardRestriction, isDateAllowedForEmployee, isRotationEligible, weeklyHomeTarget } from './rotationPolicy.js'
+import { hasHardRestriction, isDateAllowedForEmployee, isFloatingSeatEligible, isRotationEligible, weeklyHomeTarget } from './rotationPolicy.js'
 
 const BLOCKED_FLOATING_SEATS_BY_LOCATION = {
   WEWORK: new Set(['3']),
@@ -58,7 +58,7 @@ export function parkingUsageByDay(schedule, assigned, employees, days) {
 // seatAssignment.js — asignación diaria de puestos a flotantes.
 // Los flotantes ocupan los puestos físicos libres de WeWork y Oficina 93.
 export function assignFloatingSeats(schedule, employees, days, params, manualDeskAssignments = []) {
-  const floaters = employees.filter((e) => e.isFloating && e.isActive && e.hybridApproved)
+  const floaters = employees.filter(isFloatingSeatEligible)
   const activeEmployees = employees.filter((e) => e.isActive)
   const employeesById = Object.fromEntries(employees.map((employee) => [employee.id, employee]))
   const locationLabels = {

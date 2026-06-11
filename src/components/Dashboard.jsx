@@ -1,6 +1,7 @@
 import React from 'react'
 import { KpiCard, AlertList } from './Shared.jsx'
 import { MONTH_LABEL, dayOfMonth } from '../logic/dateUtils.js'
+import { isFloatingSeatEligible } from '../logic/rotationPolicy.js'
 
 const pct = (value) => `${Math.round(value)}%`
 const avg = (values) => (values.length ? values.reduce((total, value) => total + value, 0) / values.length : 0)
@@ -54,7 +55,7 @@ export default function Dashboard({
     params.seats93
   )
   const eligibleEmployees = employees.filter((employee) => employee.isActive && employee.hybridApproved)
-  const floaters = eligibleEmployees.filter((employee) => employee.isFloating)
+  const floaters = employees.filter(isFloatingSeatEligible)
   const workdayCount = workdays.length
   const healthyDays = workdays.filter((day) => day.alerts.length === 0).length
   const healthyRate = workdayCount ? (healthyDays / workdayCount) * 100 : 0
