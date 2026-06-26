@@ -707,8 +707,8 @@ export default function App() {
     if (snap.manualOverrides) setManualOverrides(snap.manualOverrides)
     if (snap.params) setParams({ ...defaultParameters, ...snap.params })
     const nextPeriod = normalizePeriod(
-      typeof snap.year === 'number' ? snap.year : year,
-      typeof snap.month === 'number' ? snap.month : month
+      typeof snap.year === 'number' ? snap.year : MIN_YEAR,
+      typeof snap.month === 'number' ? snap.month : MIN_MONTH
     )
     setYear(nextPeriod.year)
     setMonth(nextPeriod.month)
@@ -722,7 +722,7 @@ export default function App() {
       setManualOffice93ByPeriod({ [importedKey]: snap.manualOffice93 })
     }
     if (resetView) setView('dashboard')
-  }, [month, year])
+  }, [])
 
   const restoreBackup = () => {
     const backup = latestBackup()
