@@ -369,6 +369,10 @@ export default function App() {
   const [params, setParams] = useState({ ...defaultParameters, ...(editableStored.params || {}) })
   const [month, setMonth] = useState(initialPeriod.month)
   const [year, setYear] = useState(initialPeriod.year)
+  const monthOptions = isReadOnly
+    ? [MIN_MONTH, MIN_MONTH + 1]
+    : MONTH_LABEL.map((_, index) => index).filter((index) => year !== MIN_YEAR || index >= MIN_MONTH)
+  const showMonthControl = showPeriodControls
   const [manualParking, setManualParking] = useState(editableStored.manualParking || [])
   const [manualOffice93ByPeriod, setManualOffice93ByPeriod] = useState(editableStored.manualOffice93ByPeriod || {})
   const [manualLockersByPeriod, setManualLockersByPeriod] = useState(editableStored.manualLockersByPeriod || {})
@@ -992,22 +996,22 @@ export default function App() {
             </div>
           </div>
           <div className="topbar-actions">
-            {showPeriodControls && !isReadOnly && (
+            {showMonthControl && (
               <div className="topbar-period">
                 <div className="topbar-field">
                   <label>Mes</label>
                   <select value={month} onChange={(e) => handleMonthChange(Number(e.target.value))}>
-                    {MONTH_LABEL.map((label, index) => (
-                      year === MIN_YEAR && index < MIN_MONTH
-                        ? null
-                        : <option key={label} value={index}>{label}</option>
+                    {monthOptions.map((index) => (
+                      <option key={MONTH_LABEL[index]} value={index}>{MONTH_LABEL[index]}</option>
                     ))}
                   </select>
                 </div>
-                <div className="topbar-field topbar-field-year">
-                  <label>Anio</label>
-                  <input type="number" min={MIN_YEAR} value={year} onChange={(e) => handleYearChange(Number(e.target.value))} />
-                </div>
+                {!isReadOnly && (
+                  <div className="topbar-field topbar-field-year">
+                    <label>Anio</label>
+                    <input type="number" min={MIN_YEAR} value={year} onChange={(e) => handleYearChange(Number(e.target.value))} />
+                  </div>
+                )}
               </div>
             )}
             {!isReadOnly && <button className="btn btn-ghost" onClick={clearOverrides}>Limpiar ajustes</button>}
