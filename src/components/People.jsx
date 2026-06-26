@@ -49,7 +49,7 @@ function publicRestrictionLabel(employee) {
   return RESTRICTION_LABELS[employee.restrictionType] || employee.restrictionType
 }
 
-export default function People({ employees, setEmployees, onDeleteEmployee }) {
+export default function People({ employees, setEmployees, onSaveEmployee, onDeleteEmployee, periodLabel = '' }) {
   const [editing, setEditing] = useState(null)
   const [search, setSearch] = useState('')
   const [location, setLocation] = useState('ALL')
@@ -146,6 +146,12 @@ export default function People({ employees, setEmployees, onDeleteEmployee }) {
   })
 
   const save = (emp) => {
+    if (onSaveEmployee) {
+      onSaveEmployee(emp)
+      setEditing(null)
+      return
+    }
+
     if (emp.id) {
       setEmployees((prev) => prev.map((employee) => {
         if (employee.id !== emp.id) return employee
@@ -274,7 +280,7 @@ export default function People({ employees, setEmployees, onDeleteEmployee }) {
           <thead>
             <tr>
               <th><button className="th-btn" onClick={() => toggleSort('name')}>Nombre{sortMark('name')}</button></th>
-              <th><button className="th-btn" onClick={() => toggleSort('baseSeat')}>Puesto{sortMark('baseSeat')}</button></th>
+              <th><button className="th-btn" onClick={() => toggleSort('baseSeat')}>Puesto {periodLabel}{sortMark('baseSeat')}</button></th>
               <th><button className="th-btn" onClick={() => toggleSort('discipline')}>Disciplina{sortMark('discipline')}</button></th>
               <th><button className="th-btn" onClick={() => toggleSort('location')}>Ubicacion{sortMark('location')}</button></th>
               <th>Condicion</th>
@@ -342,7 +348,7 @@ export default function People({ employees, setEmployees, onDeleteEmployee }) {
           </tbody>
         </table>
       </div>
-      {editing && <EmployeeModal emp={editing} onClose={() => setEditing(null)} onSave={save} />}
+      {editing && <EmployeeModal emp={editing} onClose={() => setEditing(null)} onSave={save} periodLabel={periodLabel} />}
     </div>
   )
 }
@@ -374,7 +380,7 @@ function YesNoFilter({ value, onChange }) {
   )
 }
 
-function EmployeeModal({ emp, onClose, onSave }) {
+function EmployeeModal({ emp, onClose, onSave, periodLabel }) {
   const [f, setF] = useState(emp)
   const up = (k, v) => setF((p) => ({ ...p, [k]: v }))
   return (
@@ -398,7 +404,7 @@ function EmployeeModal({ emp, onClose, onSave }) {
                 <option value="REMOTO">Remoto</option>
               </select>
             </div>
-            <div className="field"><label>Numero de puesto</label><input type="text" style={{ width: '100%' }} value={f.baseSeat} onChange={(e) => up('baseSeat', e.target.value)} placeholder="Ej. 49" /></div>
+            <div className="field"><label>Numero de puesto {periodLabel}</label><input type="text" style={{ width: '100%' }} value={f.baseSeat} onChange={(e) => up('baseSeat', e.target.value)} placeholder="Ej. 49" /></div>
             <div className="field"><label>Condicion / restriccion</label>
               <select style={{ width: '100%' }} value={f.restrictionType || 'NONE'} onChange={(e) => up('restrictionType', e.target.value)}>
                 {RESTRICTION_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}

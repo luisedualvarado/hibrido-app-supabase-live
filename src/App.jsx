@@ -47,6 +47,7 @@ const TITLES = {
 
 const periodKeyFor = (year, month) => `${year}-${month}`
 const EMPTY_ARRAY = []
+const EMPTY_OBJECT = {}
 const MIN_YEAR = 2026
 const MIN_MONTH = 5
 const PUBLIC_READ_ONLY = import.meta.env.VITE_PUBLIC_READ_ONLY === 'true'
@@ -205,6 +206,28 @@ function buildPreservedOverrides({ schedule, employees, existingOverrides, exclu
   })
 
   return preserved
+}
+
+function applyEmployeeSeatOverrides(employeeList, seatOverrides = EMPTY_OBJECT) {
+  return employeeList.map((employee) => {
+    if (!Object.prototype.hasOwnProperty.call(seatOverrides, employee.id)) return employee
+    return { ...employee, baseSeat: seatOverrides[employee.id] }
+  })
+}
+
+function nextPeriodMapWithEmployeeRemoved(map, employeeId) {
+  return Object.fromEntries(
+    Object.entries(map).map(([key, entries]) => {
+      const nextEntries = { ...entries }
+      delete nextEntries[employeeId]
+      return [key, nextEntries]
+    })
+  )
+}
+
+function makeEmployeeId(name) {
+  return `${(name || 'persona').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${Date.now().toString(36)}`
 }
 
 function mergeEmployeeSeatDefaults(employeeList) {
@@ -377,6 +400,7 @@ export default function App() {
   const [manualOffice93ByPeriod, setManualOffice93ByPeriod] = useState(editableStored.manualOffice93ByPeriod || {})
   const [manualLockersByPeriod, setManualLockersByPeriod] = useState(editableStored.manualLockersByPeriod || {})
   const [manualDeskAssignmentsByPeriod, setManualDeskAssignmentsByPeriod] = useState(editableStored.manualDeskAssignmentsByPeriod || {})
+  const [employeeSeatOverridesByPeriod, setEmployeeSeatOverridesByPeriod] = useState(editableStored.employeeSeatOverridesByPeriod || {})
   const [savedWeeksByPeriod, setSavedWeeksByPeriod] = useState(editableStored.savedWeeksByPeriod || {})
   const [didHydrateStoredState, setDidHydrateStoredState] = useState(false)
   const [liveSyncReady, setLiveSyncReady] = useState(() => !LIVE_SYNC_ENABLED)
@@ -397,6 +421,12 @@ export default function App() {
   const manualOffice93 = hasManualOffice93 ? manualOffice93ByPeriod[periodKey] : EMPTY_ARRAY
   const manualLockers = manualLockersByPeriod[periodKey] || EMPTY_ARRAY
   const manualDeskAssignments = manualDeskAssignmentsByPeriod[periodKey] || EMPTY_ARRAY
+  const employeeSeatOverrides = employeeSeatOverridesByPeriod[periodKey] || EMPTY_OBJECT
+  const employeesForPeriod = useMemo(
+    () => applyEmployeeSeatOverrides(employees, employeeSeatOverrides),
+    [employees, employeeSeatOverrides]
+  )
+  const periodLabel = `${MONTH_LABEL[month]} ${year}`
   const savedWeeks = savedWeeksByPeriod[periodKey] || EMPTY_ARRAY
 
   const setSafeView = useCallback((nextView) => {
@@ -496,9 +526,9 @@ export default function App() {
     const effectiveParams = isPublishedJune
       ? { ...params, ...PUBLIC_JUNE_PARAMS_OVERRIDE }
       : params
-    const office93AssignedAuto = assignOffice93ForMonth({ employees, params, monthIndex: month, manualOffice93 })
+    const office93AssignedAuto = assignOffice93ForMonth({ employees: employeesForPeriod, params, monthIndex: month, manualOffice93 })
     const office93Assigned = publicJuneOffice93 || (hasManualOffice93 ? Array.from(new Set(manualOffice93)) : office93AssignedAuto)
-    const effectiveEmployees = applyOffice93Assignment(employees, office93Assigned)
+    const effectiveEmployees = applyOffice93Assignment(employeesForPeriod, office93Assigned)
     const effectiveManualOverrides = filterScheduleOverrides(manualOverrides)
 
     const base = generateMonthlySchedule({
@@ -581,7 +611,7 @@ export default function App() {
       kpis,
       effectiveParams,
     }
-  }, [employees, holidays, absences, manualOverrides, month, year, params, manualParking, manualOffice93, hasManualOffice93, generationTick, isReadOnly, manualDeskAssignments, manualLockers])
+  }, [employeesForPeriod, holidays, absences, manualOverrides, month, year, params, manualParking, manualOffice93, hasManualOffice93, generationTick, isReadOnly, manualDeskAssignments, manualLockers])
 
   const updateEmployees = useCallback((updater) => {
     const nextEmployees = typeof updater === 'function' ? updater(employees) : updater
@@ -658,6 +688,39 @@ export default function App() {
     }))
   }, [periodKey])
 
+  const saveEmployeeForPeriod = useCallback((emp) => {
+    const nextSeat = String(emp.baseSeat || '').trim()
+
+    if (!emp.id) {
+      const id = makeEmployeeId(emp.name)
+      setEmployees((prev) => [...prev, { ...emp, id, baseSeat: nextSeat, nameOverride: true }])
+      return
+    }
+
+    const original = employees.find((employee) => employee.id === emp.id)
+    const baseSeat = original?.baseSeat || ''
+
+    setEmployees((prev) => prev.map((employee) => {
+      if (employee.id !== emp.id) return employee
+      return {
+        ...emp,
+        baseSeat,
+        nameOverride: emp.name !== employee.name ? true : employee.nameOverride,
+      }
+    }))
+
+    setEmployeeSeatOverridesByPeriod((prev) => {
+      const current = { ...(prev[periodKey] || {}) }
+      if (nextSeat === baseSeat) delete current[emp.id]
+      else current[emp.id] = nextSeat
+
+      const next = { ...prev }
+      if (Object.keys(current).length === 0) delete next[periodKey]
+      else next[periodKey] = current
+      return next
+    })
+  }, [employees, periodKey])
+
   const deleteEmployee = useCallback((employeeId) => {
     setEmployees((prev) => prev.filter((employee) => employee.id !== employeeId))
     setAbsences((prev) => prev.filter((absence) => absence.employeeId !== employeeId))
@@ -672,6 +735,7 @@ export default function App() {
     setManualDeskAssignmentsByPeriod((prev) => Object.fromEntries(
       Object.entries(prev).map(([key, assignments]) => [key, assignments.filter((assignment) => assignment.employeeId !== employeeId)])
     ))
+    setEmployeeSeatOverridesByPeriod((prev) => nextPeriodMapWithEmployeeRemoved(prev, employeeId))
   }, [])
 
   const clearOverrides = () => {
@@ -698,8 +762,9 @@ export default function App() {
     manualOffice93ByPeriod,
     manualLockersByPeriod,
     manualDeskAssignmentsByPeriod,
+    employeeSeatOverridesByPeriod,
     savedWeeksByPeriod,
-  }), [employees, holidays, absences, manualOverrides, params, month, year, manualParking, manualOffice93ByPeriod, manualLockersByPeriod, manualDeskAssignmentsByPeriod, savedWeeksByPeriod])
+  }), [employees, holidays, absences, manualOverrides, params, month, year, manualParking, manualOffice93ByPeriod, manualLockersByPeriod, manualDeskAssignmentsByPeriod, employeeSeatOverridesByPeriod, savedWeeksByPeriod])
   const currentSnapshotJson = useMemo(() => JSON.stringify(currentSnapshot), [currentSnapshot])
   const buildSnapshot = useCallback(() => currentSnapshot, [currentSnapshot])
 
@@ -720,6 +785,7 @@ export default function App() {
     if (snap.manualOffice93ByPeriod) setManualOffice93ByPeriod(snap.manualOffice93ByPeriod)
     if (snap.manualLockersByPeriod) setManualLockersByPeriod(snap.manualLockersByPeriod)
     if (snap.manualDeskAssignmentsByPeriod) setManualDeskAssignmentsByPeriod(snap.manualDeskAssignmentsByPeriod)
+    if (snap.employeeSeatOverridesByPeriod) setEmployeeSeatOverridesByPeriod(snap.employeeSeatOverridesByPeriod)
     if (snap.savedWeeksByPeriod) setSavedWeeksByPeriod(snap.savedWeeksByPeriod)
     else if (snap.manualOffice93) {
       const importedKey = periodKeyFor(nextPeriod.year, nextPeriod.month)
@@ -1070,7 +1136,7 @@ export default function App() {
               setManualDeskAssignments={setManualDeskAssignmentsForPeriod}
             />
           )}
-          {view === 'people' && <People employees={employees} setEmployees={updateEmployees} onDeleteEmployee={deleteEmployee} />}
+          {view === 'people' && <People employees={employeesForPeriod} setEmployees={updateEmployees} onSaveEmployee={saveEmployeeForPeriod} onDeleteEmployee={deleteEmployee} periodLabel={periodLabel} />}
           {view === 'restrictions' && <Restrictions employees={employees} setEmployees={updateEmployees} />}
           {view === 'absences' && <Absences employees={employees} absences={absences} setAbsences={setAbsences} />}
           {view === 'holidays' && <Holidays holidays={holidays} setHolidays={setHolidays} />}
