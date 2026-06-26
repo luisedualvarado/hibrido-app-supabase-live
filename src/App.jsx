@@ -549,8 +549,21 @@ export default function App() {
       params: effectiveParams,
       generationSeed: `${year}-${month}`,
     })
+    const balancedBase = enforceNoOfficeOvercapacity(
+      base,
+      effectiveEmployees,
+      holidays,
+      effectiveParams,
+      `${year}-${month}-base`
+    )
+    const scheduleWithManualOverrides = applyManualOverrides(
+      balancedBase,
+      effectiveManualOverrides,
+      effectiveEmployees,
+      effectiveParams
+    )
     const schedule = enforceNoOfficeOvercapacity(
-      applyManualOverrides(base, effectiveManualOverrides, effectiveEmployees, effectiveParams),
+      scheduleWithManualOverrides,
       effectiveEmployees,
       holidays,
       effectiveParams,
