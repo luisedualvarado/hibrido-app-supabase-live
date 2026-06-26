@@ -97,7 +97,7 @@ test('capacity balancing never sends a non-approved employee home', () => {
   assert.ok(balanced.alerts.some((alert) => alert.rule === 'WEWORK_EXTRA_HOME_FOR_CAPACITY'))
 })
 
-test('manual TC cannot break approval, restriction or weekly target', () => {
+test('manual TC respects approval and restriction but can exceed weekly target', () => {
   const fixed = employee('fixed', { restrictionType: 'FIXED_DAY', fixedDay: 'WEDNESDAY' })
   const unrestricted = employee('unrestricted')
   const notApproved = employee('not-approved', { hybridApproved: false })
@@ -119,9 +119,10 @@ test('manual TC cannot break approval, restriction or weekly target', () => {
   assert.equal(result.cells[`${notApproved.id}__${week.workdays[0]}`].status, 'OFFICE')
   assert.equal(result.cells[`${fixed.id}__${invalidFixedDay}`].status, 'OFFICE')
   assert.equal(homeDays(result, fixed.id, week.workdays).length, 1)
+  assert.equal(result.cells[`${unrestricted.id}__${unrestrictedExtra}`].status, 'HOME')
   assert.ok(result.alerts.some((alert) => alert.rule === 'MANUAL_HOME_NOT_APPROVED'))
   assert.ok(result.alerts.some((alert) => alert.rule === 'MANUAL_HOME_RESTRICTION'))
-  assert.ok(result.alerts.some((alert) => alert.rule === 'MANUAL_HOME_LIMIT'))
+  assert.ok(result.alerts.some((alert) => alert.rule === 'MANUAL_HOME_EXTRA'))
 })
 
 test('final policy removes invalid TC introduced by legacy published data', () => {
