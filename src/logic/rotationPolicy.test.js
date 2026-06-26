@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { generateMonthlySchedule, enforceNoOfficeOvercapacity, enforceRotationPolicy } from './scheduleGenerator.js'
-import { assignOffice93ForMonth, applyOffice93Assignment } from './locationRotation.js'
+import { applyMonthlyFloatingAssignment, applyOffice93Assignment } from './locationRotation.js'
 import { applyManualOverrides, assignFloatingSeats } from './parkingGenerator.js'
 import { getWorkdaysByWeek, weekdayKey } from './dateUtils.js'
 import { buildFloatingSeatEmployees, weeklyHomeTarget } from './rotationPolicy.js'
@@ -186,6 +186,35 @@ test('daily summary counts floating seats by actual assigned location', () => {
   assert.equal(summary[0].totalOffice93, 1)
 })
 
+test('july office 93 has only Gabriel and Juan as monthly floaters', () => {
+  const office93Ids = [
+    'almeida-daniel',
+    'desalvador-diego',
+    'escobar-andres',
+    'garcia-gabriel',
+    'guevara-marylin',
+    'molina-jessica',
+    'morales-fabio',
+    'morales-jonathan',
+    'quiroz-millan-juan',
+    'rodriguez-sofia',
+    'rojas-camilo',
+    'vanegas-kaory',
+  ]
+  const people = office93Ids.map((id) => employee(id, { isFloating: false }))
+  const office93Employees = applyOffice93Assignment(people, office93Ids)
+  const effective = applyMonthlyFloatingAssignment(office93Employees, {
+    year: 2026,
+    month: 6,
+    office93Assigned: office93Ids,
+  })
+
+  const monthlyFloaters = effective
+    .filter((item) => item.baseLocation === 'OFICINA_93' && item.isFloating)
+    .map((item) => item.id)
+
+  assert.deepEqual(monthlyFloaters, ['garcia-gabriel', 'quiroz-millan-juan'])
+})
 test('floating seats do not borrow desks from another monthly office group', () => {
   const date = '2026-07-15'
   const weRegular = employee('we-regular', { isFloating: false, baseLocation: 'WEWORK', baseSeat: '1' })

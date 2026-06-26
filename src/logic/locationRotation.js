@@ -1,5 +1,28 @@
 // locationRotation.js - rotacion mensual de puestos de Oficina 93.
 
+const MONTHLY_FLOATING_BY_PERIOD = {
+  '2026-6': {
+    OFICINA_93: ['garcia-gabriel', 'quiroz-millan-juan'],
+  },
+}
+
+export function applyMonthlyFloatingAssignment(employees, { year, month, office93Assigned = [] }) {
+  const period = MONTHLY_FLOATING_BY_PERIOD[`${year}-${month}`]
+  if (!period) return employees
+  const office93Floaters = new Set(period.OFICINA_93 || [])
+  const office93AssignedSet = new Set(office93Assigned)
+
+  return employees.map((employee) => {
+    const isOffice93Floater = office93Floaters.has(employee.id) && office93AssignedSet.has(employee.id)
+    if (!isOffice93Floater) return employee
+    return {
+      ...employee,
+      isFloating: true,
+      monthlyFloatingLocation: 'OFICINA_93',
+    }
+  })
+}
+
 function orderedPool(employees) {
   return employees
     .filter((e) => e.isActive && e.baseLocation !== 'REMOTO')

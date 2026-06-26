@@ -13,7 +13,7 @@ import { initialHolidays, initialAbsences, defaultParameters } from './data/init
 
 import { enforceNoOfficeOvercapacity, generateMonthlySchedule } from './logic/scheduleGenerator.js'
 import { assignParkingForMonth, parkingUsageByDay, assignFloatingSeats, applyManualOverrides } from './logic/parkingGenerator.js'
-import { assignOffice93ForMonth, applyOffice93Assignment } from './logic/locationRotation.js'
+import { assignOffice93ForMonth, applyMonthlyFloatingAssignment, applyOffice93Assignment } from './logic/locationRotation.js'
 import { assignLockersForMonth } from './logic/lockerGenerator.js'
 import { buildDailySummary, validateSchedule, buildDashboardKPIs } from './logic/validators.js'
 import { MONTH_LABEL, isHoliday, isOddCalendarDay, isWeekend } from './logic/dateUtils.js'
@@ -536,7 +536,8 @@ export default function App() {
       : params
     const office93AssignedAuto = assignOffice93ForMonth({ employees: employeesForPeriod, params, monthIndex: month, manualOffice93 })
     const office93Assigned = publicJuneOffice93 || (hasManualOffice93 ? Array.from(new Set(manualOffice93)) : office93AssignedAuto)
-    const effectiveEmployees = applyOffice93Assignment(employeesForPeriod, office93Assigned)
+    const office93Employees = applyOffice93Assignment(employeesForPeriod, office93Assigned)
+    const effectiveEmployees = applyMonthlyFloatingAssignment(office93Employees, { year, month, office93Assigned })
     const effectiveManualOverrides = filterScheduleOverrides(manualOverrides)
 
     const base = generateMonthlySchedule({
