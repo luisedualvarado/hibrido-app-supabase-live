@@ -66,7 +66,6 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
     OFICINA_93: 'Oficina 93',
   }
   const compareSeat = (left, right) => String(left).localeCompare(String(right), 'es', { numeric: true })
-  const alternateLocationFor = (location) => location === 'WEWORK' ? 'OFICINA_93' : 'WEWORK'
   const sortByName = (left, right) => left.name.localeCompare(right.name, 'es')
   const seatsByLocation = {
     WEWORK: [...PHYSICAL_SEATS_BY_LOCATION.WEWORK].sort(compareSeat),
@@ -201,40 +200,6 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
       }
     }
 
-    for (const location of ['WEWORK', 'OFICINA_93']) {
-      const alternateLocation = alternateLocationFor(location)
-      const sourceUnseated = [...byLocation[location].unseated]
-      const alternateOpenSeats = [...byLocation[alternateLocation].openSeats]
-      if (sourceUnseated.length === 0 || alternateOpenSeats.length === 0) continue
-
-      const reassigned = []
-      sourceUnseated.forEach((employeeId) => {
-        const seat = alternateOpenSeats.shift()
-        if (!seat) return
-        const alternateAssignment = {
-          empId: employeeId,
-          seat,
-          location: alternateLocation,
-          alt: true,
-          manual: false,
-        }
-        assigned.push(alternateAssignment)
-        byLocation[alternateLocation].assigned.push(alternateAssignment)
-        reassigned.push(employeeId)
-        alerts.push({
-          id: `floater-alt-${employeeId}-${iso}`,
-          severity: 'INFO',
-          date: iso,
-          message: `${iso}: ${employeesById[employeeId]?.name || employeeId} usa un puesto libre en ${locationLabels[alternateLocation]}.`,
-          rule: 'FLOATER_ALT_SEAT',
-          location: alternateLocation,
-          employeeId,
-        })
-      })
-
-      byLocation[alternateLocation].openSeats = alternateOpenSeats
-      byLocation[location].unseated = byLocation[location].unseated.filter((employeeId) => !reassigned.includes(employeeId))
-    }
 
     const unresolvedUnseated = ['WEWORK', 'OFICINA_93'].flatMap((location) => byLocation[location].unseated)
 

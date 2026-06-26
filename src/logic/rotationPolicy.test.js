@@ -186,49 +186,25 @@ test('daily summary counts floating seats by actual assigned location', () => {
   assert.equal(summary[0].totalOffice93, 1)
 })
 
-test('office 93 monthly rotation prioritizes July floating seat pressure', () => {
-  const pinto = employee('pinto-juan-felipe', { isFloating: true, discipline: 'Z' })
-  const vera = employee('vera-steven', { isFloating: true, discipline: 'Z' })
-  const regularOne = employee('regular-one', { discipline: 'A' })
-  const regularTwo = employee('regular-two', { discipline: 'A' })
+test('floating seats do not borrow desks from another monthly office group', () => {
+  const date = '2026-07-15'
+  const weRegular = employee('we-regular', { isFloating: false, baseLocation: 'WEWORK', baseSeat: '1' })
+  const weFloater = employee('we-floater', { isFloating: true, baseLocation: 'WEWORK' })
+  const o93Regular = employee('o93-regular', { isFloating: false, baseLocation: 'OFICINA_93', baseSeat: '39' })
+  const employees = [weRegular, weFloater, o93Regular]
+  const schedule = {
+    days: [date],
+    weeks: [{ weekId: '2026-W29', workdays: [date] }],
+    alerts: [],
+    cells: Object.fromEntries(employees.map((item) => [`${item.id}__${date}`, { status: 'OFFICE', source: 'TEST', alerts: [] }])),
+  }
 
-  const assigned = assignOffice93ForMonth({
-    employees: [regularOne, regularTwo, pinto, vera],
-    params: { ...params, seats93: 2 },
-    monthIndex: 0,
-  })
-  const reassigned = applyOffice93Assignment([regularOne, regularTwo, pinto, vera], assigned)
+  const { result } = assignFloatingSeats(schedule, employees, [date], { ...params, seatsWeWork: 1, seats93: 2 })
 
-  assert.deepEqual(assigned, [pinto.id, vera.id])
-  assert.equal(reassigned.find((item) => item.id === pinto.id).baseLocation, 'OFICINA_93')
-  assert.equal(reassigned.find((item) => item.id === regularOne.id).baseLocation, 'WEWORK')
+  assert.equal(result[date].assignedByEmp[weFloater.id], undefined)
+  assert.deepEqual(result[date].unseated, [weFloater.id])
 })
 
-test('july 2026 seats every floater using Oficina 93 capacity', () => {
-  const month = 6
-  const year = 2026
-  const office93 = assignOffice93ForMonth({
-    employees: initialEmployees,
-    params: defaultParameters,
-    monthIndex: month,
-  })
-  const employees = applyOffice93Assignment(initialEmployees, office93)
-  const base = generateMonthlySchedule({
-    employees,
-    holidays: initialHolidays,
-    absences: initialAbsences,
-    manualOverrides: [],
-    month,
-    year,
-    params: defaultParameters,
-    generationSeed: `${year}-${month}`,
-  })
-  const schedule = enforceNoOfficeOvercapacity(base, employees, initialHolidays, defaultParameters, 'july-floaters')
-  const { result } = assignFloatingSeats(schedule, employees, schedule.days, defaultParameters, [])
-  const unseated = Object.values(result).flatMap((day) => day.unseated || [])
-
-  assert.deepEqual(unseated, [])
-})
 test('capacity reports unresolved when weekly TC targets prevent a valid seating plan', () => {
   const people = Array.from({ length: 4 }, (_, index) => employee(`person-${index + 1}`))
   const schedule = generate(people, { ...params, seatsWeWork: 1 })

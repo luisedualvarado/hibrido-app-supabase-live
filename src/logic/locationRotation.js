@@ -1,18 +1,9 @@
 // locationRotation.js - rotacion mensual de puestos de Oficina 93.
 
-const FLOATING_SEAT_PRIORITY = ['pinto-juan-felipe', 'vera-steven']
-
 function orderedPool(employees) {
   return employees
     .filter((e) => e.isActive && e.baseLocation !== 'REMOTO')
     .sort((a, b) => {
-      const aPriority = FLOATING_SEAT_PRIORITY.indexOf(a.id)
-      const bPriority = FLOATING_SEAT_PRIORITY.indexOf(b.id)
-      if (aPriority !== -1 || bPriority !== -1) {
-        if (aPriority === -1) return 1
-        if (bPriority === -1) return -1
-        return aPriority - bPriority
-      }
       if (a.discipline === b.discipline) return a.name.localeCompare(b.name, 'es')
       return a.discipline.localeCompare(b.discipline, 'es')
     })
