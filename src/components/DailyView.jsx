@@ -18,24 +18,34 @@ export default function DailyView({ schedule, employees, summary, floatingResult
 
   const selectedDate = workdayOptions.includes(date) ? date : firstWorkday
   const day = summary.find((item) => item.date === selectedDate)
+  const floating = floatingResult?.[selectedDate] || { assigned: [], unseated: [], assignedByEmp: {} }
   const groups = useMemo(() => {
     const home = []
     const we = []
     const o93 = []
+    const assignedByEmp = floating.assignedByEmp || {}
+    const unseatedFloaters = new Set(floating.unseated || [])
+
     for (const employee of employees) {
       const cell = schedule.cells[`${employee.id}__${selectedDate}`]
       if (!cell) continue
-      const person = { ...employee, dailySource: cell.source }
+      const assignedSeat = assignedByEmp[employee.id]
+      const person = {
+        ...employee,
+        dailySource: cell.source,
+        displaySeat: assignedSeat?.seat || employee.baseSeat,
+      }
       if (cell.status === 'HOME') home.push(person)
       else if (cell.status === 'OFFICE') {
-        if (employee.baseLocation === 'OFICINA_93') o93.push(person)
-        else if (employee.baseLocation === 'WEWORK') we.push(person)
+        if (employee.isFloating && unseatedFloaters.has(employee.id)) continue
+        const assignedLocation = employee.isFloating ? assignedSeat?.location : null
+        const officeLocation = assignedLocation || employee.baseLocation
+        if (officeLocation === 'OFICINA_93') o93.push(person)
+        else if (officeLocation === 'WEWORK') we.push(person)
       }
     }
     return { home: home.sort(byName), we: we.sort(byName), o93: o93.sort(byName) }
-  }, [employees, schedule, selectedDate])
-
-  const floating = floatingResult?.[selectedDate] || { assigned: [], unseated: [] }
+  }, [employees, floating, schedule, selectedDate])
   const parking = parkingUsage?.[selectedDate] || []
 
   return (
@@ -82,7 +92,7 @@ export default function DailyView({ schedule, employees, summary, floatingResult
                 {floating.assigned.length === 0 && floating.unseated.length === 0 && <div className="muted">Sin flotantes presenciales este dia.</div>}
                 {floating.assigned.map((assignment) => (
                   <div key={assignment.empId} className="checkbox-row">
-                    <span className="badge green">{assignment.seat}</span> {byEmp[assignment.empId]?.name}
+                    <span className="badge green">{assignment.location === 'OFICINA_93' ? '93' : 'WW'} {assignment.seat}</span> {byEmp[assignment.empId]?.name}
                   </div>
                 ))}
                 {floating.unseated.map((id) => (
@@ -139,7 +149,7 @@ function ListCard({ title, people, tone }) {
             {people.map((person) => (
               <span key={person.id} className={`badge ${tone}`}>
                 {person.name}
-                {person.baseSeat && <small className="badge-suffix">Puesto {person.baseSeat}</small>}
+                {person.displaySeat && <small className="badge-suffix">Puesto {person.displaySeat}</small>}
                 {person.dailySource === 'MANUAL' && <small className="badge-suffix">Manual</small>}
               </span>
             ))}
