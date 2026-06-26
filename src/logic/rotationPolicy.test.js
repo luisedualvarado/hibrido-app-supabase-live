@@ -94,7 +94,7 @@ test('capacity balancing never sends a non-approved employee home', () => {
   const balanced = enforceNoOfficeOvercapacity(schedule, [approved, notApproved], [], { ...params, seatsWeWork: 1 }, 'test')
 
   assert.equal(balanced.days.some((date) => balanced.cells[`not-approved__${date}`]?.status === 'HOME'), false)
-  assert.ok(balanced.alerts.some((alert) => alert.rule === 'WEWORK_CAPACITY_UNRESOLVED'))
+  assert.ok(balanced.alerts.some((alert) => alert.rule === 'WEWORK_EXTRA_HOME_FOR_CAPACITY'))
 })
 
 test('manual TC cannot break approval, restriction or weekly target', () => {
@@ -180,4 +180,15 @@ test('daily summary counts floating seats by actual assigned location', () => {
 
   assert.equal(summary[0].totalOfficeWeWork, 0)
   assert.equal(summary[0].totalOffice93, 1)
+})
+test('capacity wins over weekly TC target when seats are insufficient', () => {
+  const people = Array.from({ length: 4 }, (_, index) => employee(`person-${index + 1}`))
+  const schedule = generate(people, { ...params, seatsWeWork: 1 })
+  const balanced = enforceNoOfficeOvercapacity(schedule, people, [], { ...params, seatsWeWork: 1 }, 'capacity-extra')
+
+  for (const date of balanced.days.filter((day) => !['2026-06-06', '2026-06-07'].includes(day))) {
+    const present = people.filter((item) => balanced.cells[`${item.id}__${date}`]?.status === 'OFFICE')
+    assert.ok(present.length <= 1, `${date} has ${present.length} people in office`)
+  }
+  assert.ok(balanced.alerts.some((alert) => alert.rule === 'WEWORK_EXTRA_HOME_FOR_CAPACITY'))
 })

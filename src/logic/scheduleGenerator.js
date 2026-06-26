@@ -256,6 +256,7 @@ function balanceOfficeCapacity({ employees, cells, days, weeks, holidays, params
       const orderedCandidates = [...movablePresent]
         .filter((employee) => isRotationEligible(employee))
         .sort((a, b) => {
+          if (!!a.isFloating !== !!b.isFloating) return a.isFloating ? 1 : -1
           const aCanRespect = canAssignHome(a, iso, cells, monthWorkdays)
           const bCanRespect = canAssignHome(b, iso, cells, monthWorkdays)
           if (aCanRespect !== bCanRespect) return aCanRespect ? -1 : 1
@@ -285,19 +286,29 @@ function balanceOfficeCapacity({ employees, cells, days, weeks, holidays, params
           canAssignHome(candidate, iso, cells, monthWorkdays) &&
           countHomeDays(cells, candidate.id, week.workdays) < weeklyHomeTarget(candidate)
         )
-        if (!extraCandidate) {
+        const capacityCandidate = extraCandidate || orderedCandidates.find((candidate) =>
+          canAssignHome(candidate, iso, cells, monthWorkdays)
+        )
+        if (!capacityCandidate) {
           addAlert?.('CRITICAL',
-            `${iso}: el sobrecupo de ${officeName} no puede resolverse sin romper aprobacion, restriccion o dias TC.`,
+            `${iso}: el sobrecupo de ${officeName} no puede resolverse sin romper aprobacion o restriccion.`,
             `${location}_CAPACITY_UNRESOLVED`, { date: iso })
           break
         }
         setExtraHomeDay(
-          extraCandidate,
+          capacityCandidate,
           iso,
           cells,
           homeCountByDay,
-          `TC asignado dentro del limite para evitar sobrecupo en ${officeName}`
+          extraCandidate
+            ? `TC asignado dentro del limite para evitar sobrecupo en ${officeName}`
+            : `TC extra asignado para respetar el limite fisico de puestos en ${officeName}`
         )
+        if (!extraCandidate) {
+          addAlert?.('WARNING',
+            `${iso}: ${capacityCandidate.name} recibe TC extra para no superar los ${seats} puestos de ${officeName}.`,
+            `${location}_EXTRA_HOME_FOR_CAPACITY`, { date: iso, employeeId: capacityCandidate.id })
+        }
       }
       present = officeEmployees.filter((employee) => cells[`${employee.id}__${iso}`]?.status === 'OFFICE')
     }
