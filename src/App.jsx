@@ -268,17 +268,25 @@ function parseJSON(raw) {
 }
 
 function rememberBackup(raw) {
-  const snap = parseJSON(raw)
-  if (!snap?.employees?.length) return
-  window.localStorage.setItem(BACKUP_KEY, raw)
-  const history = parseJSON(window.localStorage.getItem(BACKUP_HISTORY_KEY)) || []
-  const nextEntry = {
-    savedAt: new Date().toISOString(),
-    employeeCount: snap.employees.length,
-    data: snap,
+  try {
+    const snap = parseJSON(raw)
+    if (!snap?.employees?.length) return
+    window.localStorage.setItem(BACKUP_KEY, raw)
+    const history = parseJSON(window.localStorage.getItem(BACKUP_HISTORY_KEY)) || []
+    const nextEntry = {
+      savedAt: new Date().toISOString(),
+      employeeCount: snap.employees.length,
+      data: snap,
+    }
+    const withoutDuplicate = history.filter((entry) => JSON.stringify(entry.data) !== JSON.stringify(snap))
+    window.localStorage.setItem(BACKUP_HISTORY_KEY, JSON.stringify([nextEntry, ...withoutDuplicate].slice(0, 3)))
+  } catch (error) {
+    try {
+      window.localStorage.removeItem(BACKUP_HISTORY_KEY)
+    } catch (cleanupError) {
+      // The backup is optional; never let storage cleanup break editing.
+    }
   }
-  const withoutDuplicate = history.filter((entry) => JSON.stringify(entry.data) !== JSON.stringify(snap))
-  window.localStorage.setItem(BACKUP_HISTORY_KEY, JSON.stringify([nextEntry, ...withoutDuplicate].slice(0, 10)))
 }
 
 function latestBackup() {
@@ -1003,10 +1011,22 @@ export default function App() {
 
   useEffect(() => {
     if (isReadOnly) return
-    const previous = window.localStorage.getItem(STORAGE_KEY)
     const next = currentSnapshotJson
-    if (previous && previous !== next) rememberBackup(previous)
-    window.localStorage.setItem(STORAGE_KEY, next)
+
+    try {
+      const previous = window.localStorage.getItem(STORAGE_KEY)
+      if (previous && previous !== next) rememberBackup(previous)
+      window.localStorage.setItem(STORAGE_KEY, next)
+    } catch (error) {
+      try {
+        window.localStorage.removeItem(BACKUP_HISTORY_KEY)
+        window.localStorage.removeItem(BACKUP_KEY)
+        window.localStorage.setItem(STORAGE_KEY, next)
+      } catch (retryError) {
+        setLiveSyncStatus('error')
+        setLiveSyncError('No se pudo guardar en este navegador. Publica para conservar los cambios en Supabase.')
+      }
+    }
   }, [currentSnapshotJson, isReadOnly])
 
   useEffect(() => {
