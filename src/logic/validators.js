@@ -27,6 +27,8 @@ export function buildDailySummary(schedule, employees, days, params, parkingUsag
     let officeWe = 0
     let office93 = 0
     const homeNames = []
+    const floating = floatingResult?.[iso] || { assigned: [], unseated: [], assignedByEmp: {} }
+    const floatingAssignedByEmp = floating.assignedByEmp || {}
 
     for (const employee of employees) {
       const cell = schedule.cells[`${employee.id}__${iso}`]
@@ -35,14 +37,15 @@ export function buildDailySummary(schedule, employees, days, params, parkingUsag
         totalHome += 1
         homeNames.push(employee.name)
       } else if (cell.status === 'OFFICE') {
-        if (employee.baseLocation === 'OFICINA_93') office93 += 1
-        else if (employee.baseLocation === 'WEWORK') officeWe += 1
+        const assignedLocation = employee.isFloating ? floatingAssignedByEmp[employee.id]?.location : null
+        const officeLocation = assignedLocation || employee.baseLocation
+        if (officeLocation === 'OFICINA_93') office93 += 1
+        else if (officeLocation === 'WEWORK') officeWe += 1
       }
     }
 
     const freeWe = params.seatsWeWork - officeWe
     const free93 = params.seats93 - office93
-    const floating = floatingResult?.[iso] || { assigned: [], unseated: [] }
     const parkUsed = (parkingUsage?.[iso] || []).length
 
     const daySummary = {

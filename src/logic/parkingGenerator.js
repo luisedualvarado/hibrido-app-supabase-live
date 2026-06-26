@@ -72,6 +72,10 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
     WEWORK: [...PHYSICAL_SEATS_BY_LOCATION.WEWORK].sort(compareSeat),
     OFICINA_93: [...PHYSICAL_SEATS_BY_LOCATION.OFICINA_93].sort(compareSeat),
   }
+  const configuredSeatLimit = (location) => {
+    const configured = Number(location === 'OFICINA_93' ? params.seats93 : params.seatsWeWork)
+    return Number.isFinite(configured) && configured >= 0 ? configured : seatsByLocation[location].length
+  }
   const manualAssignmentsByDate = manualDeskAssignments.reduce((acc, assignment) => {
     if (!assignment?.date) return acc
     acc[assignment.date] = [...(acc[assignment.date] || []), assignment]
@@ -90,8 +94,8 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
         unseated: [],
         freeSeats: params.seatsWeWork,
         byLocation: {
-          WEWORK: { availableSeats: seatsByLocation.WEWORK, assigned: [], unseated: [], occupiedSeats: [] },
-          OFICINA_93: { availableSeats: seatsByLocation.OFICINA_93, assigned: [], unseated: [], occupiedSeats: [] },
+          WEWORK: { availableSeats: seatsByLocation.WEWORK.slice(0, configuredSeatLimit('WEWORK')), assigned: [], unseated: [], occupiedSeats: [] },
+          OFICINA_93: { availableSeats: seatsByLocation.OFICINA_93.slice(0, configuredSeatLimit('OFICINA_93')), assigned: [], unseated: [], occupiedSeats: [] },
         },
       }
       continue
@@ -129,7 +133,10 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
       const occupiedAssignments = [...explicitOccupiedAssignments, ...derivedOccupiedAssignments].sort((left, right) => compareSeat(left.seat, right.seat))
       const occupiedSeats = occupiedAssignments.map((assignment) => assignment.seat)
 
-      const availableSeats = seatsByLocation[location].filter((seat) => !occupiedSeats.includes(seat) && !blockedSeats.has(seat))
+      const openSeatLimit = Math.max(0, configuredSeatLimit(location) - presentRegularEmployees.length)
+      const availableSeats = seatsByLocation[location]
+        .filter((seat) => !occupiedSeats.includes(seat) && !blockedSeats.has(seat))
+        .slice(0, openSeatLimit)
       const remainingSeats = [...availableSeats]
       const presentFloaters = floaters
         .filter((employee) => employee.baseLocation === location)

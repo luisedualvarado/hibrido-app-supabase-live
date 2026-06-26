@@ -4,6 +4,7 @@ import { generateMonthlySchedule, enforceNoOfficeOvercapacity, enforceRotationPo
 import { applyManualOverrides, assignFloatingSeats } from './parkingGenerator.js'
 import { getWorkdaysByWeek, weekdayKey } from './dateUtils.js'
 import { buildFloatingSeatEmployees } from './rotationPolicy.js'
+import { buildDailySummary } from './validators.js'
 
 const params = { seatsWeWork: 20, seats93: 10, parkingSpots: 3, lockers: 36 }
 
@@ -136,4 +137,47 @@ test('final policy removes invalid TC introduced by legacy published data', () =
   const result = enforceRotationPolicy(schedule, [notApproved])
   assert.equal(result.cells[`${notApproved.id}__${date}`].status, 'OFFICE')
   assert.ok(result.alerts.some((alert) => alert.rule === 'INVALID_HOME_REMOVED'))
+})
+
+test('floating seats never exceed configured WeWork capacity', () => {
+  const date = '2026-06-01'
+  const regular = employee('regular', { isFloating: false, baseSeat: '1' })
+  const floaterOne = employee('floater-one', { isFloating: true })
+  const floaterTwo = employee('floater-two', { isFloating: true })
+  const employees = [regular, floaterOne, floaterTwo]
+  const schedule = {
+    days: [date],
+    weeks: [{ weekId: '2026-W23', workdays: [date] }],
+    alerts: [],
+    cells: Object.fromEntries(employees.map((item) => [`${item.id}__${date}`, { status: 'OFFICE', source: 'TEST', alerts: [] }])),
+  }
+
+  const { result } = assignFloatingSeats(schedule, employees, [date], { ...params, seatsWeWork: 2, seats93: 0 })
+
+  assert.equal(result[date].byLocation.WEWORK.assigned.length, 1)
+  assert.equal(result[date].assignedByEmp[floaterOne.id]?.location, 'WEWORK')
+  assert.equal(result[date].unseated.length, 1)
+})
+
+test('daily summary counts floating seats by actual assigned location', () => {
+  const date = '2026-06-01'
+  const floater = employee('floater', { isFloating: true, baseLocation: 'WEWORK' })
+  const schedule = {
+    days: [date],
+    weeks: [{ weekId: '2026-W23', workdays: [date] }],
+    alerts: [],
+    cells: { [`${floater.id}__${date}`]: { status: 'OFFICE', source: 'TEST', alerts: [] } },
+  }
+  const floatingResult = {
+    [date]: {
+      assigned: [{ empId: floater.id, seat: '39', location: 'OFICINA_93' }],
+      unseated: [],
+      assignedByEmp: { [floater.id]: { seat: '39', location: 'OFICINA_93' } },
+    },
+  }
+
+  const { summary } = buildDailySummary(schedule, [floater], [date], { ...params, seatsWeWork: 1, seats93: 1 }, {}, floatingResult, [])
+
+  assert.equal(summary[0].totalOfficeWeWork, 0)
+  assert.equal(summary[0].totalOffice93, 1)
 })
