@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { generateMonthlySchedule, enforceNoOfficeOvercapacity, enforceRotationPolicy } from './scheduleGenerator.js'
 import { applyManualOverrides, assignFloatingSeats } from './parkingGenerator.js'
 import { getWorkdaysByWeek, weekdayKey } from './dateUtils.js'
-import { buildFloatingSeatEmployees } from './rotationPolicy.js'
+import { buildFloatingSeatEmployees, weeklyHomeTarget } from './rotationPolicy.js'
 import { buildDailySummary } from './validators.js'
 
 const params = { seatsWeWork: 20, seats93: 10, parkingSpots: 3, lockers: 36 }
@@ -94,10 +94,10 @@ test('capacity balancing never sends a non-approved employee home', () => {
   const balanced = enforceNoOfficeOvercapacity(schedule, [approved, notApproved], [], { ...params, seatsWeWork: 1 }, 'test')
 
   assert.equal(balanced.days.some((date) => balanced.cells[`not-approved__${date}`]?.status === 'HOME'), false)
-  assert.ok(balanced.alerts.some((alert) => alert.rule === 'WEWORK_EXTRA_HOME_FOR_CAPACITY'))
+  assert.ok(balanced.alerts.some((alert) => alert.rule === 'WEWORK_CAPACITY_UNRESOLVED'))
 })
 
-test('manual TC respects approval and restriction but can exceed weekly target', () => {
+test('manual TC cannot break approval, restriction or weekly target', () => {
   const fixed = employee('fixed', { restrictionType: 'FIXED_DAY', fixedDay: 'WEDNESDAY' })
   const unrestricted = employee('unrestricted')
   const notApproved = employee('not-approved', { hybridApproved: false })
@@ -119,10 +119,10 @@ test('manual TC respects approval and restriction but can exceed weekly target',
   assert.equal(result.cells[`${notApproved.id}__${week.workdays[0]}`].status, 'OFFICE')
   assert.equal(result.cells[`${fixed.id}__${invalidFixedDay}`].status, 'OFFICE')
   assert.equal(homeDays(result, fixed.id, week.workdays).length, 1)
-  assert.equal(result.cells[`${unrestricted.id}__${unrestrictedExtra}`].status, 'HOME')
+  assert.equal(result.cells[`${unrestricted.id}__${unrestrictedExtra}`].status, 'OFFICE')
   assert.ok(result.alerts.some((alert) => alert.rule === 'MANUAL_HOME_NOT_APPROVED'))
   assert.ok(result.alerts.some((alert) => alert.rule === 'MANUAL_HOME_RESTRICTION'))
-  assert.ok(result.alerts.some((alert) => alert.rule === 'MANUAL_HOME_EXTRA'))
+  assert.ok(result.alerts.some((alert) => alert.rule === 'MANUAL_HOME_LIMIT'))
 })
 
 test('final policy removes invalid TC introduced by legacy published data', () => {
@@ -182,14 +182,16 @@ test('daily summary counts floating seats by actual assigned location', () => {
   assert.equal(summary[0].totalOfficeWeWork, 0)
   assert.equal(summary[0].totalOffice93, 1)
 })
-test('capacity wins over weekly TC target when seats are insufficient', () => {
+
+test('capacity reports unresolved when weekly TC targets prevent a valid seating plan', () => {
   const people = Array.from({ length: 4 }, (_, index) => employee(`person-${index + 1}`))
   const schedule = generate(people, { ...params, seatsWeWork: 1 })
-  const balanced = enforceNoOfficeOvercapacity(schedule, people, [], { ...params, seatsWeWork: 1 }, 'capacity-extra')
+  const balanced = enforceNoOfficeOvercapacity(schedule, people, [], { ...params, seatsWeWork: 1 }, 'capacity-strict')
 
-  for (const date of balanced.days.filter((day) => !['2026-06-06', '2026-06-07'].includes(day))) {
-    const present = people.filter((item) => balanced.cells[`${item.id}__${date}`]?.status === 'OFFICE')
-    assert.ok(present.length <= 1, `${date} has ${present.length} people in office`)
+  assert.ok(balanced.alerts.some((alert) => alert.rule === 'WEWORK_CAPACITY_UNRESOLVED'))
+  for (const person of people) {
+    for (const week of balanced.weeks) {
+      assert.equal(homeDays(balanced, person.id, week.workdays).length, weeklyHomeTarget(person))
+    }
   }
-  assert.ok(balanced.alerts.some((alert) => alert.rule === 'WEWORK_EXTRA_HOME_FOR_CAPACITY'))
 })

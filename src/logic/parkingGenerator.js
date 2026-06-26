@@ -287,23 +287,13 @@ export function applyManualOverrides(schedule, manualOverrides, employees = [], 
       } else if (hasHardRestriction(employee) && !isDateAllowedForEmployee(employee, ov.date)) {
         message = `${employee.name}: ajuste a TC no aplicado porque rompe su restriccion.`
         rule = 'MANUAL_HOME_RESTRICTION'
-      } else if (!week) {
-        message = `${employee.name}: ajuste a TC no aplicado porque la fecha no pertenece a una semana laboral.`
-        rule = 'MANUAL_HOME_NO_WEEK'
+      } else if (!week || projectedHomeDays > weeklyHomeTarget(employee)) {
+        message = `${employee.name}: ajuste a TC no aplicado porque supera sus dias TC semanales.`
+        rule = 'MANUAL_HOME_LIMIT'
       }
       if (message) {
         alerts.push({ id: `${rule}-${alerts.length}`, severity: 'CRITICAL', date: ov.date, employeeId: ov.employeeId, message, rule })
         continue
-      }
-      if (projectedHomeDays > weeklyHomeTarget(employee)) {
-        alerts.push({
-          id: `MANUAL_HOME_EXTRA-${alerts.length}`,
-          severity: 'WARNING',
-          date: ov.date,
-          employeeId: ov.employeeId,
-          message: `${employee.name}: ajuste manual a TC supera sus dias TC semanales para respetar capacidad.`,
-          rule: 'MANUAL_HOME_EXTRA',
-        })
       }
     }
     if (ov.status === 'OFFICE' && employee && ['WEWORK', 'OFICINA_93'].includes(employee.baseLocation)) {

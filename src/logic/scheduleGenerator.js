@@ -286,29 +286,19 @@ function balanceOfficeCapacity({ employees, cells, days, weeks, holidays, params
           canAssignHome(candidate, iso, cells, monthWorkdays) &&
           countHomeDays(cells, candidate.id, week.workdays) < weeklyHomeTarget(candidate)
         )
-        const capacityCandidate = extraCandidate || orderedCandidates.find((candidate) =>
-          canAssignHome(candidate, iso, cells, monthWorkdays)
-        )
-        if (!capacityCandidate) {
+        if (!extraCandidate) {
           addAlert?.('CRITICAL',
-            `${iso}: el sobrecupo de ${officeName} no puede resolverse sin romper aprobacion o restriccion.`,
+            `${iso}: el sobrecupo de ${officeName} no puede resolverse sin romper aprobacion, restriccion o dias TC.`,
             `${location}_CAPACITY_UNRESOLVED`, { date: iso })
           break
         }
         setExtraHomeDay(
-          capacityCandidate,
+          extraCandidate,
           iso,
           cells,
           homeCountByDay,
-          extraCandidate
-            ? `TC asignado dentro del limite para evitar sobrecupo en ${officeName}`
-            : `TC extra asignado para respetar el limite fisico de puestos en ${officeName}`
+          `TC asignado dentro del limite para evitar sobrecupo en ${officeName}`
         )
-        if (!extraCandidate) {
-          addAlert?.('WARNING',
-            `${iso}: ${capacityCandidate.name} recibe TC extra para no superar los ${seats} puestos de ${officeName}.`,
-            `${location}_EXTRA_HOME_FOR_CAPACITY`, { date: iso, employeeId: capacityCandidate.id })
-        }
       }
       present = officeEmployees.filter((employee) => cells[`${employee.id}__${iso}`]?.status === 'OFFICE')
     }
