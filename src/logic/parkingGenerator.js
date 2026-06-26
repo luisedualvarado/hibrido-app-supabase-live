@@ -76,6 +76,7 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
     const configured = Number(location === 'OFICINA_93' ? params.seats93 : params.seatsWeWork)
     return Number.isFinite(configured) && configured >= 0 ? configured : seatsByLocation[location].length
   }
+  const configuredSeatsFor = (location) => seatsByLocation[location].slice(0, configuredSeatLimit(location))
   const manualAssignmentsByDate = manualDeskAssignments.reduce((acc, assignment) => {
     if (!assignment?.date) return acc
     acc[assignment.date] = [...(acc[assignment.date] || []), assignment]
@@ -94,8 +95,8 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
         unseated: [],
         freeSeats: params.seatsWeWork,
         byLocation: {
-          WEWORK: { availableSeats: seatsByLocation.WEWORK.slice(0, configuredSeatLimit('WEWORK')), assigned: [], unseated: [], occupiedSeats: [] },
-          OFICINA_93: { availableSeats: seatsByLocation.OFICINA_93.slice(0, configuredSeatLimit('OFICINA_93')), assigned: [], unseated: [], occupiedSeats: [] },
+          WEWORK: { availableSeats: configuredSeatsFor('WEWORK'), assigned: [], unseated: [], occupiedSeats: [] },
+          OFICINA_93: { availableSeats: configuredSeatsFor('OFICINA_93'), assigned: [], unseated: [], occupiedSeats: [] },
         },
       }
       continue
@@ -106,6 +107,7 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
 
     for (const location of ['WEWORK', 'OFICINA_93']) {
       const blockedSeats = BLOCKED_FLOATING_SEATS_BY_LOCATION[location] || new Set()
+      const configuredSeats = configuredSeatsFor(location)
       const presentRegularEmployees = activeEmployees
         .filter((employee) => !employee.isFloating && employee.baseLocation === location && employee.baseSeat)
         .filter((employee) => schedule.cells[`${employee.id}__${iso}`]?.status === 'OFFICE')
@@ -114,12 +116,12 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
 
       presentRegularEmployees.forEach((employee) => {
         const seat = employee.baseSeat
-        if (!seat || !seatsByLocation[location].includes(seat) || explicitlyOccupiedSeats.has(seat)) return
+        if (!seat || !configuredSeats.includes(seat) || explicitlyOccupiedSeats.has(seat)) return
         explicitOccupiedAssignments.push({ empId: employee.id, seat, location, derived: false })
         explicitlyOccupiedSeats.add(seat)
       })
 
-      const remainingInventory = seatsByLocation[location].filter((seat) => !explicitlyOccupiedSeats.has(seat))
+      const remainingInventory = configuredSeats.filter((seat) => !explicitlyOccupiedSeats.has(seat))
       const derivedOccupiedAssignments = presentRegularEmployees
         .filter((employee) => !explicitlyOccupiedSeats.has(employee.baseSeat))
         .sort(sortByName)
@@ -133,8 +135,8 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
       const occupiedAssignments = [...explicitOccupiedAssignments, ...derivedOccupiedAssignments].sort((left, right) => compareSeat(left.seat, right.seat))
       const occupiedSeats = occupiedAssignments.map((assignment) => assignment.seat)
 
-      const openSeatLimit = Math.max(0, configuredSeatLimit(location) - presentRegularEmployees.length)
-      const availableSeats = seatsByLocation[location]
+      const openSeatLimit = Math.max(0, configuredSeats.length - presentRegularEmployees.length)
+      const availableSeats = configuredSeats
         .filter((seat) => !occupiedSeats.includes(seat) && !blockedSeats.has(seat))
         .slice(0, openSeatLimit)
       const remainingSeats = [...availableSeats]
