@@ -709,16 +709,13 @@ export default function App() {
       }
     }))
 
-    setEmployeeSeatOverridesByPeriod((prev) => {
-      const current = { ...(prev[periodKey] || {}) }
-      if (nextSeat === baseSeat) delete current[emp.id]
-      else current[emp.id] = nextSeat
-
-      const next = { ...prev }
-      if (Object.keys(current).length === 0) delete next[periodKey]
-      else next[periodKey] = current
-      return next
-    })
+    setEmployeeSeatOverridesByPeriod((prev) => ({
+      ...prev,
+      [periodKey]: {
+        ...(prev[periodKey] || {}),
+        [emp.id]: nextSeat,
+      },
+    }))
   }, [employees, periodKey])
 
   const deleteEmployee = useCallback((employeeId) => {
@@ -750,7 +747,7 @@ export default function App() {
   }
 
   const currentSnapshot = useMemo(() => ({
-    version: 2,
+    version: 3,
     employees,
     holidays,
     absences,
@@ -785,7 +782,7 @@ export default function App() {
     if (snap.manualOffice93ByPeriod) setManualOffice93ByPeriod(snap.manualOffice93ByPeriod)
     if (snap.manualLockersByPeriod) setManualLockersByPeriod(snap.manualLockersByPeriod)
     if (snap.manualDeskAssignmentsByPeriod) setManualDeskAssignmentsByPeriod(snap.manualDeskAssignmentsByPeriod)
-    if (snap.employeeSeatOverridesByPeriod) setEmployeeSeatOverridesByPeriod(snap.employeeSeatOverridesByPeriod)
+    setEmployeeSeatOverridesByPeriod(snap.employeeSeatOverridesByPeriod || {})
     if (snap.savedWeeksByPeriod) setSavedWeeksByPeriod(snap.savedWeeksByPeriod)
     else if (snap.manualOffice93) {
       const importedKey = periodKeyFor(nextPeriod.year, nextPeriod.month)
