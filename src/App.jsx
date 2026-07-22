@@ -52,6 +52,7 @@ const MIN_YEAR = 2026
 const MIN_MONTH = 5
 const PUBLIC_READ_ONLY = import.meta.env.VITE_PUBLIC_READ_ONLY === 'true'
 const PUBLIC_PUBLISHED_JUNE_LOCK = import.meta.env.VITE_PUBLIC_PUBLISHED_JUNE === 'true'
+const PREVIEW_SNAPSHOT_URL = import.meta.env.VITE_PREVIEW_SNAPSHOT_URL || ''
 const PUBLIC_VIEWS = ['dashboard', 'monthly', 'daily', 'desks', 'lockers']
 const PUBLIC_JUNE_OFFICE93_IDS = [
   'hilario-martin',
@@ -411,6 +412,7 @@ export default function App() {
   const [employeeSeatOverridesByPeriod, setEmployeeSeatOverridesByPeriod] = useState(editableStored.employeeSeatOverridesByPeriod || {})
   const [savedWeeksByPeriod, setSavedWeeksByPeriod] = useState(editableStored.savedWeeksByPeriod || {})
   const [didHydrateStoredState, setDidHydrateStoredState] = useState(false)
+  const [didHydratePreviewSnapshot, setDidHydratePreviewSnapshot] = useState(false)
   const [liveSyncReady, setLiveSyncReady] = useState(() => !LIVE_SYNC_ENABLED)
   const [liveSyncStatus, setLiveSyncStatus] = useState(() => LIVE_SYNC_ENABLED ? 'idle' : 'disabled')
   const [liveSyncError, setLiveSyncError] = useState('')
@@ -823,6 +825,32 @@ export default function App() {
     if (ok) importSnapshot(backup)
   }
 
+
+  useEffect(() => {
+    if (!PREVIEW_SNAPSHOT_URL || didHydratePreviewSnapshot) return
+    let cancelled = false
+    fetch(PREVIEW_SNAPSHOT_URL)
+      .then((response) => {
+        if (!response.ok) throw new Error(`No se pudo cargar ${PREVIEW_SNAPSHOT_URL}`)
+        return response.json()
+      })
+      .then((payload) => {
+        if (cancelled) return
+        importSnapshot(payload.snapshot || payload, { resetView: false })
+        setDidHydratePreviewSnapshot(true)
+        setDidHydrateStoredState(true)
+        setLiveSyncStatus('preview')
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setDidHydratePreviewSnapshot(true)
+        setLiveSyncStatus('error')
+        setLiveSyncError(error.message || 'No se pudo cargar la copia local de trabajo.')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [didHydratePreviewSnapshot, importSnapshot])
   const refreshLiveSyncHistory = useCallback(async () => {
     if (!LIVE_SYNC_ENABLED || !isAdmin) {
       setLiveSyncHistory([])

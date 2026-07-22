@@ -134,7 +134,7 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
       const occupiedAssignments = [...explicitOccupiedAssignments, ...derivedOccupiedAssignments].sort((left, right) => compareSeat(left.seat, right.seat))
       const occupiedSeats = occupiedAssignments.map((assignment) => assignment.seat)
 
-      const availableSeats = configuredSeats.filter((seat) => !blockedSeats.has(seat))
+      const availableSeats = configuredSeats.filter((seat) => !occupiedSeats.includes(seat) && !blockedSeats.has(seat))
       const remainingSeats = [...availableSeats]
       const presentFloaters = floaters
         .filter((employee) => employee.baseLocation === location)

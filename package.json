@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "test": "node --test src/logic/*.test.js",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preview:work": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Copy-Item -LiteralPath 'backups/work-julio-2026.json' -Destination 'public/preview/work-julio-2026.json' -Force\" && vite --mode localpreview --host 127.0.0.1"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",

@@ -143,7 +143,7 @@ test('final policy removes invalid TC introduced by legacy published data', () =
   assert.ok(result.alerts.some((alert) => alert.rule === 'INVALID_HOME_REMOVED'))
 })
 
-test('floating seats are assigned before regular occupancy consumes capacity', () => {
+test('floating seats avoid desks occupied by their regular owner', () => {
   const date = '2026-06-01'
   const regular = employee('regular', { isFloating: false, baseSeat: '1' })
   const floaterOne = employee('floater-one', { isFloating: true })
@@ -158,10 +158,11 @@ test('floating seats are assigned before regular occupancy consumes capacity', (
 
   const { result } = assignFloatingSeats(schedule, employees, [date], { ...params, seatsWeWork: 2, seats93: 0 })
 
-  assert.equal(result[date].byLocation.WEWORK.assigned.length, 2)
+  assert.equal(result[date].byLocation.WEWORK.assigned.length, 1)
   assert.equal(result[date].assignedByEmp[floaterOne.id]?.location, 'WEWORK')
-  assert.equal(result[date].assignedByEmp[floaterTwo.id]?.location, 'WEWORK')
-  assert.deepEqual(result[date].unseated, [])
+  assert.equal(result[date].assignedByEmp[floaterOne.id]?.seat, '2')
+  assert.equal(result[date].assignedByEmp[floaterTwo.id], undefined)
+  assert.deepEqual(result[date].unseated, [floaterTwo.id])
 })
 
 test('daily summary counts floating seats by actual assigned location', () => {
