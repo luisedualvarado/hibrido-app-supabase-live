@@ -287,11 +287,9 @@ function balanceOfficeCapacity({ employees, cells, days, weeks, holidays, params
           countHomeDays(cells, candidate.id, week.workdays) < weeklyHomeTarget(candidate)
         )
         if (!extraCandidate) {
-          const operationalCandidate = orderedCandidates.find((candidate) =>
-            week &&
-            weeklyHomeTarget(candidate) === 1 &&
-            canAssignHome(candidate, iso, cells, monthWorkdays)
-          )
+          const operationalCandidate = orderedCandidates
+            .filter((candidate) => week && canAssignHome(candidate, iso, cells, monthWorkdays))
+            .sort((a, b) => weeklyHomeTarget(a) - weeklyHomeTarget(b))[0]
           if (!operationalCandidate) {
             addAlert?.('CRITICAL',
               `${iso}: el sobrecupo de ${officeName} no puede resolverse sin romper aprobacion o restriccion.`,

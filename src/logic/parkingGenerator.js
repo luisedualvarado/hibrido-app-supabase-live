@@ -244,7 +244,6 @@ function canUseOperationalHome(employee, iso, cells, week) {
   const cell = cells[`${employee.id}__${iso}`]
   if (!cell || cell.status !== 'OFFICE' || cell.source === 'MANUAL') return false
   if (!isRotationEligible(employee)) return false
-  if (weeklyHomeTarget(employee) !== 1) return false
   if (hasHardRestriction(employee) && !isDateAllowedForEmployee(employee, iso)) return false
   if (employee.avoidConsecutiveHomeDays && week && hasAdjacentHome(cells, employee.id, iso, week.workdays)) return false
   return true
@@ -287,6 +286,9 @@ export function resolveFloatingSeatShortages(schedule, employees, days, params, 
       .filter((employee) => !employee.isFloating && employee.baseLocation === shortage.location)
       .filter((employee) => canUseOperationalHome(employee, shortage.iso, cells, week))
       .sort((left, right) => {
+        const leftTarget = weeklyHomeTarget(left)
+        const rightTarget = weeklyHomeTarget(right)
+        if (leftTarget !== rightTarget) return leftTarget - rightTarget
         const leftBlocked = blockedSeats[shortage.location]?.has(left.baseSeat) ? 1 : 0
         const rightBlocked = blockedSeats[shortage.location]?.has(right.baseSeat) ? 1 : 0
         if (leftBlocked !== rightBlocked) return leftBlocked - rightBlocked
