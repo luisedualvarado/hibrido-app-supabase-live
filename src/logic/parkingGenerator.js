@@ -225,6 +225,106 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
   return { result, alerts }
 }
 
+
+function weekForDate(weeks, iso) {
+  return weeks?.find((week) => week.workdays.includes(iso))
+}
+
+function hasAdjacentHome(cells, employeeId, iso, workdays) {
+  const index = workdays.indexOf(iso)
+  const previous = index > 0 ? workdays[index - 1] : null
+  const next = index >= 0 && index < workdays.length - 1 ? workdays[index + 1] : null
+  return Boolean(
+    (previous && cells[`${employeeId}__${previous}`]?.status === 'HOME') ||
+    (next && cells[`${employeeId}__${next}`]?.status === 'HOME')
+  )
+}
+
+function canUseOperationalHome(employee, iso, cells, week) {
+  const cell = cells[`${employee.id}__${iso}`]
+  if (!cell || cell.status !== 'OFFICE' || cell.source === 'MANUAL') return false
+  if (!isRotationEligible(employee)) return false
+  if (hasHardRestriction(employee) && !isDateAllowedForEmployee(employee, iso)) return false
+  if (employee.avoidConsecutiveHomeDays && week && hasAdjacentHome(cells, employee.id, iso, week.workdays)) return false
+  return true
+}
+
+function setOperationalHome(cells, employee, iso, locationLabel) {
+  const key = `${employee.id}__${iso}`
+  cells[key] = {
+    ...cells[key],
+    status: 'HOME',
+    source: 'CAPACITY',
+    alerts: [
+      ...(cells[key].alerts || []),
+      'Asignado automaticamente por cupo',
+      `TC operativo por cupo para garantizar puesto flotante en ${locationLabel}`,
+    ],
+  }
+}
+
+export function resolveFloatingSeatShortages(schedule, employees, days, params, manualDeskAssignments = []) {
+  const cells = { ...schedule.cells }
+  const alerts = [...(schedule.alerts || [])]
+  const locationLabels = { WEWORK: 'WeWork', OFICINA_93: 'Oficina 93' }
+  const blockedSeats = BLOCKED_FLOATING_SEATS_BY_LOCATION
+  const maxAttempts = Math.max(1, days.length * employees.length)
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const currentSchedule = { ...schedule, cells, alerts }
+    const { result } = assignFloatingSeats(currentSchedule, employees, days, params, manualDeskAssignments)
+    const shortage = days.flatMap((iso) => ['WEWORK', 'OFICINA_93'].map((location) => ({
+      iso,
+      location,
+      count: result[iso]?.byLocation?.[location]?.unseated?.length || 0,
+    }))).find((entry) => entry.count > 0)
+
+    if (!shortage) return currentSchedule
+
+    const week = weekForDate(schedule.weeks, shortage.iso)
+    const candidates = employees
+      .filter((employee) => !employee.isFloating && employee.baseLocation === shortage.location)
+      .filter((employee) => canUseOperationalHome(employee, shortage.iso, cells, week))
+      .sort((left, right) => {
+        const leftBlocked = blockedSeats[shortage.location]?.has(left.baseSeat) ? 1 : 0
+        const rightBlocked = blockedSeats[shortage.location]?.has(right.baseSeat) ? 1 : 0
+        if (leftBlocked !== rightBlocked) return leftBlocked - rightBlocked
+        return left.name.localeCompare(right.name, 'es')
+      })
+
+    const candidate = candidates[0]
+    if (!candidate) {
+      alerts.push({
+        id: `FLOATER_SEAT_CAPACITY_UNRESOLVED-${alerts.length}`,
+        severity: 'CRITICAL',
+        date: shortage.iso,
+        message: `${shortage.iso}: no hay persona elegible para TC operativo que libere puesto flotante en ${locationLabels[shortage.location]}.`,
+        rule: 'FLOATER_SEAT_CAPACITY_UNRESOLVED',
+        location: shortage.location,
+      })
+      return currentSchedule
+    }
+
+    setOperationalHome(cells, candidate, shortage.iso, locationLabels[shortage.location])
+    alerts.push({
+      id: `FLOATER_SEAT_CAPACITY_HOME_ASSIGNED-${alerts.length}`,
+      severity: 'INFO',
+      date: shortage.iso,
+      employeeId: candidate.id,
+      message: `${shortage.iso}: ${candidate.name} queda en TC operativo para liberar puesto flotante en ${locationLabels[shortage.location]}.`,
+      rule: 'FLOATER_SEAT_CAPACITY_HOME_ASSIGNED',
+      location: shortage.location,
+    })
+  }
+
+  alerts.push({
+    id: `FLOATER_SEAT_CAPACITY_UNRESOLVED-${alerts.length}`,
+    severity: 'CRITICAL',
+    message: 'No se pudo resolver la asignacion de puestos flotantes con TC operativo.',
+    rule: 'FLOATER_SEAT_CAPACITY_UNRESOLVED',
+  })
+  return { ...schedule, cells, alerts }
+}
 // applyManualOverrides — fuerza estados manuales sobre el schedule.
 export function applyManualOverrides(schedule, manualOverrides, employees = [], params = {}) {
   const cells = { ...schedule.cells }

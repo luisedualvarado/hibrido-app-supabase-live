@@ -12,7 +12,7 @@ import { initialEmployees } from './data/initialEmployees.js'
 import { initialHolidays, initialAbsences, defaultParameters } from './data/initialHolidays.js'
 
 import { enforceNoOfficeOvercapacity, generateMonthlySchedule } from './logic/scheduleGenerator.js'
-import { assignParkingForMonth, parkingUsageByDay, assignFloatingSeats, applyManualOverrides } from './logic/parkingGenerator.js'
+import { assignParkingForMonth, parkingUsageByDay, assignFloatingSeats, applyManualOverrides, resolveFloatingSeatShortages } from './logic/parkingGenerator.js'
 import { assignOffice93ForMonth, applyMonthlyFloatingAssignment, applyOffice93Assignment } from './logic/locationRotation.js'
 import { assignLockersForMonth } from './logic/lockerGenerator.js'
 import { buildDailySummary, validateSchedule, buildDashboardKPIs } from './logic/validators.js'
@@ -573,9 +573,16 @@ export default function App() {
       `${year}-${month}-final`
     )
 
+    const scheduleWithFloatingSeats = resolveFloatingSeatShortages(
+      schedule,
+      effectiveEmployees,
+      schedule.days,
+      effectiveParams,
+      manualDeskAssignments
+    )
     const publicJuneAdjusted = isPublishedJune
-      ? applyPublicJuneOffice93Adjustments(schedule, effectiveEmployees, holidays)
-      : { schedule, employees: effectiveEmployees }
+      ? applyPublicJuneOffice93Adjustments(scheduleWithFloatingSeats, effectiveEmployees, holidays)
+      : { schedule: scheduleWithFloatingSeats, employees: effectiveEmployees }
     const effectiveSchedule = publicJuneAdjusted.schedule
     const effectiveEmployeesView = publicJuneAdjusted.employees
 

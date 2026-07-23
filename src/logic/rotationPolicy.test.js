@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { generateMonthlySchedule, enforceNoOfficeOvercapacity, enforceRotationPolicy } from './scheduleGenerator.js'
 import { applyMonthlyFloatingAssignment, applyOffice93Assignment } from './locationRotation.js'
-import { applyManualOverrides, assignFloatingSeats } from './parkingGenerator.js'
+import { applyManualOverrides, assignFloatingSeats, resolveFloatingSeatShortages } from './parkingGenerator.js'
 import { getWorkdaysByWeek, weekdayKey } from './dateUtils.js'
 import { buildFloatingSeatEmployees, weeklyHomeTarget } from './rotationPolicy.js'
 import { buildDailySummary } from './validators.js'
@@ -187,6 +187,28 @@ test('floating seats avoid desks occupied by their regular owner', () => {
   assert.ok(alerts.some((alert) => alert.rule === 'FLOATER_NO_SEAT' && alert.severity === 'CRITICAL'))
 })
 
+
+test('floating shortage is resolved with operational capacity TC', () => {
+  const date = '2026-06-01'
+  const regular = employee('regular', { name: 'Regular', isFloating: false, baseSeat: '1' })
+  const floaterOne = employee('floater-one', { name: 'Floater One', isFloating: true })
+  const floaterTwo = employee('floater-two', { name: 'Floater Two', isFloating: true })
+  const people = [regular, floaterOne, floaterTwo]
+  const schedule = {
+    days: [date],
+    weeks: [{ weekId: '2026-W23', workdays: [date] }],
+    alerts: [],
+    cells: Object.fromEntries(people.map((item) => [`${item.id}__${date}`, { employeeId: item.id, date, status: 'OFFICE', source: 'TEST', alerts: [] }])),
+  }
+
+  const resolved = resolveFloatingSeatShortages(schedule, people, [date], { ...params, seatsWeWork: 2, seats93: 0 })
+  const { result } = assignFloatingSeats(resolved, people, [date], { ...params, seatsWeWork: 2, seats93: 0 })
+
+  assert.equal(resolved.cells[`${regular.id}__${date}`].status, 'HOME')
+  assert.equal(resolved.cells[`${regular.id}__${date}`].source, 'CAPACITY')
+  assert.equal(result[date].unseated.length, 0)
+  assert.equal(result[date].assigned.length, 2)
+})
 test('daily summary counts floating seats by actual assigned location', () => {
   const date = '2026-06-01'
   const floater = employee('floater', { isFloating: true, baseLocation: 'WEWORK' })
