@@ -498,7 +498,17 @@ tr:hover td { background: var(--gray-50); }
 }
 .cell.hasAlert { box-shadow: inset 0 0 0 2px var(--red); }
 .cell.hasNotice { box-shadow: inset 0 0 0 2px var(--amber); }
-.cell.manual { box-shadow: inset 0 0 0 2px var(--amber); }
+.cell.manual {
+  box-shadow: inset 0 0 0 2px var(--amber);
+}
+.cell.saved {
+  box-shadow: inset 0 0 0 2px var(--purple);
+}
+.cell.capacity {
+  background: var(--green-bg) !important;
+  color: var(--green) !important;
+  box-shadow: inset 0 0 0 2px var(--green);
+}
 .cell.desk-cell-unseated {
   background: #fff3f2;
   color: #a33424;

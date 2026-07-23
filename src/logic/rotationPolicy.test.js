@@ -90,16 +90,16 @@ test('weekly TC target is exactly one or two when valid days exist', () => {
   }
 })
 
-test('capacity balancing never sends a non-approved employee home', () => {
+test('capacity balancing uses automatic capacity TC without sending non-approved employees home', () => {
   const approved = employee('approved')
   const notApproved = employee('not-approved', { hybridApproved: false })
   const schedule = generate([approved, notApproved], { ...params, seatsWeWork: 1 })
   const balanced = enforceNoOfficeOvercapacity(schedule, [approved, notApproved], [], { ...params, seatsWeWork: 1 }, 'test')
 
   assert.equal(balanced.days.some((date) => balanced.cells[`not-approved__${date}`]?.status === 'HOME'), false)
-  assert.ok(balanced.alerts.some((alert) => alert.rule === 'WEWORK_CAPACITY_UNRESOLVED'))
+  assert.ok(balanced.days.some((date) => balanced.cells[`approved__${date}`]?.source === 'CAPACITY'))
+  assert.ok(balanced.alerts.some((alert) => alert.rule === 'WEWORK_CAPACITY_HOME_ASSIGNED'))
 })
-
 test('manual TC cannot break approval, restriction or weekly target', () => {
   const fixed = employee('fixed', { restrictionType: 'FIXED_DAY', fixedDay: 'WEDNESDAY' })
   const unrestricted = employee('unrestricted')
@@ -128,6 +128,22 @@ test('manual TC cannot break approval, restriction or weekly target', () => {
   assert.ok(result.alerts.some((alert) => alert.rule === 'MANUAL_HOME_LIMIT'))
 })
 
+test('manual TC still cannot exceed weekly target even with capacity wording', () => {
+  const approved = employee('approved')
+  const schedule = generate([approved])
+  const week = schedule.weeks[0]
+  const [firstHomeDate] = homeDays(schedule, approved.id, week.workdays)
+  const extraOfficeDate = week.workdays.find((date) => date !== firstHomeDate && schedule.cells[`${approved.id}__${date}`]?.status === 'OFFICE')
+  const result = applyManualOverrides(schedule, [{
+    employeeId: approved.id,
+    date: extraOfficeDate,
+    status: 'HOME',
+    reason: 'Ajuste operativo por cupo',
+  }], [approved], params)
+
+  assert.equal(result.cells[`${approved.id}__${extraOfficeDate}`].status, 'OFFICE')
+  assert.ok(result.alerts.some((alert) => alert.rule === 'MANUAL_HOME_LIMIT'))
+})
 test('final policy removes invalid TC introduced by legacy published data', () => {
   const notApproved = employee('not-approved', { hybridApproved: false })
   const schedule = generate([notApproved])
@@ -236,15 +252,15 @@ test('floating seats do not borrow desks from another monthly office group', () 
   assert.deepEqual(result[date].unseated, [weFloater.id])
 })
 
-test('capacity reports unresolved when weekly TC targets prevent a valid seating plan', () => {
-  const people = Array.from({ length: 4 }, (_, index) => employee(`person-${index + 1}`))
+test('capacity reports unresolved when no approved candidate can take TC', () => {
+  const people = Array.from({ length: 3 }, (_, index) => employee(`person-${index + 1}`, { hybridApproved: false }))
   const schedule = generate(people, { ...params, seatsWeWork: 1 })
   const balanced = enforceNoOfficeOvercapacity(schedule, people, [], { ...params, seatsWeWork: 1 }, 'capacity-strict')
 
   assert.ok(balanced.alerts.some((alert) => alert.rule === 'WEWORK_CAPACITY_UNRESOLVED'))
   for (const person of people) {
     for (const week of balanced.weeks) {
-      assert.equal(homeDays(balanced, person.id, week.workdays).length, weeklyHomeTarget(person))
+      assert.equal(homeDays(balanced, person.id, week.workdays).length, 0)
     }
   }
 })

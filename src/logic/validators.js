@@ -1,6 +1,10 @@
 import { isWeekend, isHoliday, weekdayKey, WEEKDAY_LABEL, getWorkdaysByWeek } from './dateUtils.js'
 import { getAllowedDatesForEmployee, isRotationEligible, weeklyHomeTarget } from './rotationPolicy.js'
 
+function isCapacityOverrideCell(cell) {
+  return cell?.source === 'CAPACITY' || (cell?.alerts || []).some((alert) => /operativo por cupo/i.test(alert))
+}
+
 function restrictionApplies(employee) {
   return employee.restrictionEnabled !== false &&
     employee.restrictionType !== 'NONE' &&
@@ -95,12 +99,45 @@ export function buildDailySummary(schedule, employees, days, params, parkingUsag
   return { summary, alerts }
 }
 
-export function validateSchedule(schedule, employees, year, month, holidays) {
+
+function validateCapacityRules(schedule, employees, params, add) {
+  const locations = [
+    { id: 'WEWORK', label: 'WeWork', seats: Number(params.seatsWeWork) || 0, rule: 'WEWORK_CAPACITY_RULES_IMPOSSIBLE' },
+    { id: 'OFICINA_93', label: 'Oficina 93', seats: Number(params.seats93) || 0, rule: 'OFFICE93_CAPACITY_RULES_IMPOSSIBLE' },
+  ]
+
+  for (const week of schedule.weeks || []) {
+    const workdays = week.workdays || []
+    if (workdays.length === 0) continue
+
+    for (const location of locations) {
+      if (location.seats <= 0) continue
+      const locationEmployees = employees.filter((employee) => employee.isActive && employee.baseLocation === location.id)
+      const requiredHomeDays = workdays.reduce((total, iso) => {
+        const operationalPeople = locationEmployees.filter((employee) => {
+          const status = schedule.cells[`${employee.id}__${iso}`]?.status
+          return status === 'OFFICE' || status === 'HOME'
+        }).length
+        return total + Math.max(0, operationalPeople - location.seats)
+      }, 0)
+      const assignedHomeDays = locationEmployees.reduce((total, employee) => (
+        total + workdays.filter((iso) => schedule.cells[`${employee.id}__${iso}`]?.status === 'HOME').length
+      ), 0)
+
+      if (assignedHomeDays < requiredHomeDays) {
+        add('CRITICAL', `${location.label}: semana ${week.weekId} requiere al menos ${requiredHomeDays} dia(s) TC para no superar ${location.seats} puestos; el plan actual solo tiene ${assignedHomeDays}.`, location.rule, { weekId: week.weekId, location: location.id })
+      }
+    }
+  }
+}
+export function validateSchedule(schedule, employees, year, month, holidays, params = {}) {
   const alerts = []
   const add = (severity, message, rule, extra = {}) =>
     alerts.push({ id: `${rule}-${alerts.length}`, severity, message, rule, ...extra })
   const weeks = getWorkdaysByWeek(year, month, holidays)
   const eligible = employees.filter(isRotationEligible)
+
+  validateCapacityRules(schedule, employees, params, add)
 
   for (const employee of eligible) {
     let prevWeekday = null
@@ -110,6 +147,7 @@ export function validateSchedule(schedule, employees, year, month, holidays) {
       if (week.workdays.length === 0) return
 
       const homeDays = week.workdays.filter((iso) => schedule.cells[`${employee.id}__${iso}`]?.status === 'HOME')
+      const regularHomeDays = homeDays.filter((iso) => !isCapacityOverrideCell(schedule.cells[`${employee.id}__${iso}`]))
       const expectedHomeDays = weeklyHomeTarget(employee)
       const allowedHomeDays = new Set(getAllowedDatesForEmployee(employee, week.workdays))
 
@@ -117,9 +155,9 @@ export function validateSchedule(schedule, employees, year, month, holidays) {
         if (expectedHomeDays > 0) {
           add('WARNING', `${employee.name}: sin trabajo en casa en una semana.`, 'NO_HOME_WEEK', { employeeId: employee.id })
         }
-      } else if (homeDays.length > expectedHomeDays) {
+      } else if (regularHomeDays.length > expectedHomeDays) {
         add('WARNING', `${employee.name}: mas de ${expectedHomeDays} dia(s) de trabajo en casa en una semana.`, 'EXTRA_HOME_WEEK', { employeeId: employee.id })
-      } else if (employee.doubleHomeConsecutive && homeDays.length === 1) {
+      } else if (employee.doubleHomeConsecutive && regularHomeDays.length === 1) {
         add('WARNING', `${employee.name}: solo tiene un dia de TC; esperaba dos dias.`, 'MISSING_DOUBLE_HOME_WEEK', { employeeId: employee.id })
       }
 

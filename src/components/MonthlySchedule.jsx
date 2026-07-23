@@ -3,18 +3,24 @@ import { isWeekend, weekdayKey, WEEKDAY_LABEL, dayOfMonth, prettyDate } from '..
 
 const STATUS_ABBR = { HOME: 'TC', VACATION: 'VAC', HOLIDAY: 'FES', ABSENCE: 'AUS', NOT_APPLICABLE: 'NA' }
 const byName = (a, b) => a.name.localeCompare(b.name, 'es')
-const RESTRICTION_ALERT = /^restricci[oÃ³]n individual no se pudo cumplir$/i
+const RESTRICTION_ALERT = /^restricci[oó]n individual no se pudo cumplir$/i
+const CAPACITY_ALERT = /operativo por cupo|asignado automaticamente por cupo|para evitar sobrecupo/i
 
-function cellAlertTone(cell) {
+function cellAlertTone(cell, isSaved = false) {
   const alerts = cell?.alerts || []
   if (!alerts.length) return ''
-  return alerts.some((alert) => RESTRICTION_ALERT.test(alert)) ? 'red' : 'amber'
+  if (alerts.some((alert) => RESTRICTION_ALERT.test(alert))) return 'red'
+  const visibleAlerts = alerts.filter((alert) => {
+    if (CAPACITY_ALERT.test(alert)) return false
+    if (isSaved && /ajuste manual aplicado/i.test(alert)) return false
+    return true
+  })
+  return visibleAlerts.length ? 'amber' : ''
 }
-
 function alertBadgeTone(alert) {
+  if (CAPACITY_ALERT.test(alert)) return 'green'
   return RESTRICTION_ALERT.test(alert) ? 'red' : 'amber'
 }
-
 function cellLabel(cell, employee) {
   if (employee.baseLocation === 'REMOTO' && cell.status === 'NOT_APPLICABLE') return 'REM'
   if (cell.status === 'OFFICE') return employee.baseLocation === 'OFICINA_93' ? '93' : 'WW'
@@ -69,6 +75,11 @@ export default function MonthlySchedule({
   const overrideFor = (empId, iso) =>
     manualOverrides.find((o) => o.employeeId === empId && o.date === iso)
   const savedWeeksMap = new Map(savedWeeks.map((entry) => [entry.weekId, entry]))
+  const savedDates = useMemo(() => new Set(savedWeeks.flatMap((entry) => entry.workdays || [])), [savedWeeks])
+  const hasSavedWeeks = !hideAlerts && savedWeeks.length > 0
+  const hasAmberNotices = useMemo(() => (
+    !hideAlerts && Object.values(schedule.cells || {}).some((cell) => cellAlertTone(cell, savedDates.has(cell.date)) === 'amber')
+  ), [hideAlerts, schedule.cells, savedDates])
 
   return (
     <div>
@@ -98,10 +109,10 @@ export default function MonthlySchedule({
       <div className="filters">
         <div className="fg" style={{ minWidth: 200 }}>
           <label>Buscar persona</label>
-          <input type="text" placeholder="Nombreâ€¦" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input type="text" placeholder="Nombre…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <div className="fg">
-          <label>UbicaciÃ³n</label>
+          <label>Ubicación</label>
           <select value={loc} onChange={(e) => setLoc(e.target.value)}>
             <option value="ALL">Todas</option>
             <option value="WEWORK">WeWork</option>
@@ -151,14 +162,16 @@ export default function MonthlySchedule({
                 {schedule.days.map((iso) => {
                   const c = schedule.cells[`${e.id}__${iso}`]
                   if (!c) return <td key={iso} className="daycell" />
-                  const alertTone = hideAlerts ? '' : cellAlertTone(c)
-                  const isManual = c.source === 'MANUAL'
+                  const isSaved = savedDates.has(iso)
+                  const alertTone = hideAlerts ? '' : cellAlertTone(c, isSaved)
+                  const isManual = c.source === 'MANUAL' && !isSaved
+                  const isCapacity = c.source === 'CAPACITY'
                   const showCellOutline = !hideAlerts && !readOnly
                   return (
                     <td key={iso} className="daycell">
                       <div
-                        className={`cell ${cellClass(c, e)} ${readOnly ? 'readOnly' : ''} ${showCellOutline && alertTone === 'red' ? 'hasAlert' : ''} ${showCellOutline && (alertTone === 'amber' || (isManual && !alertTone)) ? 'hasNotice' : ''}`}
-                        title={hideAlerts ? '' : c.alerts && c.alerts.join(' Â· ')}
+                        className={`cell ${cellClass(c, e)} ${readOnly ? 'readOnly' : ''} ${isSaved ? 'saved' : ''} ${isManual ? 'manual' : ''} ${isCapacity ? 'capacity' : ''} ${showCellOutline && alertTone === 'red' ? 'hasAlert' : ''} ${showCellOutline && alertTone === 'amber' ? 'hasNotice' : ''}`}
+                        title={hideAlerts ? '' : c.alerts && c.alerts.join(' · ')}
                         onClick={() => {
                           if (!readOnly) setEditing({ employee: e, iso, cell: c })
                         }}
@@ -175,16 +188,18 @@ export default function MonthlySchedule({
       </div>
 
       <div className="legend">
-        {!hideAlerts && <span><span className="lg-chip" style={{ background: 'var(--green-bg)', border: '1px solid var(--green)' }} /> Guardar semana Â· fija esos dias como ajustes persistentes</span>}
-        <span><span className="lg-chip" style={{ background: 'var(--blue-100)' }} /> TC Â· Trabajo en casa</span>
-        <span><span className="lg-chip" style={{ background: '#fff' }} /> WW Â· Oficina WeWork</span>
-        <span><span className="lg-chip" style={{ background: 'var(--green-bg)' }} /> 93 Â· Oficina 93</span>
-        <span><span className="lg-chip" style={{ background: '#fff1e7', border: '1px dashed #e07b39' }} /> REM Â· Full remoto</span>
-        <span><span className="lg-chip" style={{ background: '#f4ecff', border: '1px dashed #8d6be8' }} /> VAC Â· Vacaciones</span>
-        <span><span className="lg-chip" style={{ background: 'var(--gray-300)' }} /> FES Â· Festivo</span>
-        <span><span className="lg-chip" style={{ background: 'var(--orange-bg)' }} /> AUS Â· Ausencia</span>
-        {!hideAlerts && <span><span className="lg-chip" style={{ boxShadow: 'inset 0 0 0 2px var(--red)' }} /> Borde rojo Â· RestricciÃ³n no cumplida</span>}
-        {!hideAlerts && <span><span className="lg-chip" style={{ boxShadow: 'inset 0 0 0 2px var(--amber)' }} /> Borde Ã¡mbar Â· Aviso o ajuste</span>}
+        {!hideAlerts && <span><span className="lg-chip" style={{ background: 'var(--green-bg)', border: '1px solid var(--green)' }} /> Guardar semana - conserva la programacion automatica de esos dias</span>}
+        <span><span className="lg-chip" style={{ background: 'var(--blue-100)' }} /> TC · Trabajo en casa</span>
+        <span><span className="lg-chip" style={{ background: 'var(--green-bg)', border: '1px solid var(--green)' }} /> TC operativo por cupo - Automatico</span>
+        <span><span className="lg-chip" style={{ background: '#fff' }} /> WW · Oficina WeWork</span>
+        <span><span className="lg-chip" style={{ background: 'var(--green-bg)' }} /> 93 · Oficina 93</span>
+        <span><span className="lg-chip" style={{ background: '#fff1e7', border: '1px dashed #e07b39' }} /> REM · Full remoto</span>
+        <span><span className="lg-chip" style={{ background: '#f4ecff', border: '1px dashed #8d6be8' }} /> VAC · Vacaciones</span>
+        <span><span className="lg-chip" style={{ background: 'var(--gray-300)' }} /> FES · Festivo</span>
+        <span><span className="lg-chip" style={{ background: 'var(--orange-bg)' }} /> AUS · Ausencia</span>
+        {!hideAlerts && <span><span className="lg-chip" style={{ boxShadow: 'inset 0 0 0 2px var(--red)' }} /> Borde rojo · Restricción no cumplida</span>}
+        {hasSavedWeeks && <span><span className="lg-chip" style={{ boxShadow: 'inset 0 0 0 2px var(--purple)' }} /> Borde morado - Guardado</span>}
+        {hasAmberNotices && <span><span className="lg-chip" style={{ boxShadow: 'inset 0 0 0 2px var(--amber)' }} /> Borde ambar - Revisar alerta</span>}
       </div>
 
       {editing && (
@@ -203,19 +218,19 @@ export default function MonthlySchedule({
 function CellEditModal({ employee, iso, cell, existingOverride, onClose, onSave, onDelete }) {
   const [status, setStatus] = useState(cell.status)
   const [reason, setReason] = useState(existingOverride?.reason || '')
-  const SOURCE = { AUTO: 'AutomÃ¡tico', MANUAL: 'Manual', SYSTEM: 'Sistema' }
+  const SOURCE = { AUTO: 'Automático', CAPACITY: 'Automático por cupo', MANUAL: 'Manual', SYSTEM: 'Sistema' }
   const canAssignHome = employee.isActive && employee.hybridApproved && employee.baseLocation !== 'REMOTO'
   return (
     <div className="overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h3>Ajuste manual</h3>
-          <button className="x-btn" onClick={onClose}>Ã—</button>
+          <button className="x-btn" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
           <div className="field">
             <label>Persona</label>
-            <div>{employee.name} Â· <span className="muted">{employee.discipline}</span></div>
+            <div>{employee.name} · <span className="muted">{employee.discipline}</span></div>
           </div>
           <div className="field">
             <label>Fecha</label>
@@ -247,12 +262,12 @@ function CellEditModal({ employee, iso, cell, existingOverride, onClose, onSave,
               <option value="VACATION">Vacaciones (VAC)</option>
               <option value="ABSENCE">Ausencia (AUS)</option>
             </select>
-            {!canAssignHome && <div className="muted" style={{ marginTop: 6 }}>Esta persona no tiene hÃ­brido aprobado; no se puede forzar TC.</div>}
+            {!canAssignHome && <div className="muted" style={{ marginTop: 6 }}>Esta persona no tiene híbrido aprobado; no se puede forzar TC.</div>}
           </div>
           <div className="field">
-            <label>ObservaciÃ³n</label>
+            <label>Observación</label>
             <textarea rows={2} style={{ width: '100%' }} value={reason}
-              onChange={(e) => setReason(e.target.value)} placeholder="Motivo del ajusteâ€¦" />
+              onChange={(e) => setReason(e.target.value)} placeholder="Motivo del ajuste…" />
           </div>
         </div>
         <div className="modal-foot">

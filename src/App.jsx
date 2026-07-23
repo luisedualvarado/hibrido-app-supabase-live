@@ -613,7 +613,7 @@ export default function App() {
       floatingResult,
       holidays
     )
-    const validationAlerts = validateSchedule(effectiveSchedule, effectiveEmployeesView, year, month, holidays)
+    const validationAlerts = validateSchedule(effectiveSchedule, effectiveEmployeesView, year, month, holidays, effectiveParams)
 
     const allAlerts = [...effectiveSchedule.alerts, ...floatAlerts, ...dailyAlerts, ...validationAlerts]
       .sort((a, b) => {

@@ -227,12 +227,12 @@ function moveHomeDay(employee, fromIso, toIso, cells, homeCountByDay, message) {
   homeCountByDay[toIso] = (homeCountByDay[toIso] || 0) + 1
 }
 
-function setExtraHomeDay(employee, iso, cells, homeCountByDay, message, extraAlerts = []) {
+function setExtraHomeDay(employee, iso, cells, homeCountByDay, message, extraAlerts = [], source = 'AUTO') {
   const key = `${employee.id}__${iso}`
   cells[key] = {
     ...cells[key],
     status: 'HOME',
-    source: 'AUTO',
+    source,
     alerts: [...(cells[key].alerts || []), ...extraAlerts, message],
   }
   homeCountByDay[iso] = (homeCountByDay[iso] || 0) + 1
@@ -287,18 +287,37 @@ function balanceOfficeCapacity({ employees, cells, days, weeks, holidays, params
           countHomeDays(cells, candidate.id, week.workdays) < weeklyHomeTarget(candidate)
         )
         if (!extraCandidate) {
-          addAlert?.('CRITICAL',
-            `${iso}: el sobrecupo de ${officeName} no puede resolverse sin romper aprobacion, restriccion o dias TC.`,
-            `${location}_CAPACITY_UNRESOLVED`, { date: iso })
-          break
+          const operationalCandidate = orderedCandidates.find((candidate) =>
+            week &&
+            canAssignHome(candidate, iso, cells, monthWorkdays)
+          )
+          if (!operationalCandidate) {
+            addAlert?.('CRITICAL',
+              `${iso}: el sobrecupo de ${officeName} no puede resolverse sin romper aprobacion o restriccion.`,
+              `${location}_CAPACITY_UNRESOLVED`, { date: iso })
+            break
+          }
+          setExtraHomeDay(
+            operationalCandidate,
+            iso,
+            cells,
+            homeCountByDay,
+            `TC operativo por cupo en ${officeName}`,
+            ['Asignado automaticamente por cupo'],
+            'CAPACITY'
+          )
+          addAlert?.('INFO',
+            `${iso}: ${operationalCandidate.name} queda en TC operativo por cupo en ${officeName}.`,
+            `${location}_CAPACITY_HOME_ASSIGNED`, { date: iso, employeeId: operationalCandidate.id })
+        } else {
+          setExtraHomeDay(
+            extraCandidate,
+            iso,
+            cells,
+            homeCountByDay,
+            `TC asignado dentro del limite para evitar sobrecupo en ${officeName}`
+          )
         }
-        setExtraHomeDay(
-          extraCandidate,
-          iso,
-          cells,
-          homeCountByDay,
-          `TC asignado dentro del limite para evitar sobrecupo en ${officeName}`
-        )
       }
       present = officeEmployees.filter((employee) => cells[`${employee.id}__${iso}`]?.status === 'OFFICE')
     }
