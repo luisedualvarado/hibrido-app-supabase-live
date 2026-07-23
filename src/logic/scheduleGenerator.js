@@ -289,6 +289,7 @@ function balanceOfficeCapacity({ employees, cells, days, weeks, holidays, params
         if (!extraCandidate) {
           const operationalCandidate = orderedCandidates.find((candidate) =>
             week &&
+            weeklyHomeTarget(candidate) === 1 &&
             canAssignHome(candidate, iso, cells, monthWorkdays)
           )
           if (!operationalCandidate) {

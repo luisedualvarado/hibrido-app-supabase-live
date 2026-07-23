@@ -244,6 +244,7 @@ function canUseOperationalHome(employee, iso, cells, week) {
   const cell = cells[`${employee.id}__${iso}`]
   if (!cell || cell.status !== 'OFFICE' || cell.source === 'MANUAL') return false
   if (!isRotationEligible(employee)) return false
+  if (weeklyHomeTarget(employee) !== 1) return false
   if (hasHardRestriction(employee) && !isDateAllowedForEmployee(employee, iso)) return false
   if (employee.avoidConsecutiveHomeDays && week && hasAdjacentHome(cells, employee.id, iso, week.workdays)) return false
   return true

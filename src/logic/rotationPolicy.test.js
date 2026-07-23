@@ -209,6 +209,30 @@ test('floating shortage is resolved with operational capacity TC', () => {
   assert.equal(result[date].unseated.length, 0)
   assert.equal(result[date].assigned.length, 2)
 })
+
+test('floating operational capacity TC only uses one-day hybrid employees', () => {
+  const date = '2026-06-01'
+  const doubleDayRegular = employee('double-day-regular', {
+    name: 'Double Day Regular',
+    isFloating: false,
+    baseSeat: '1',
+    doubleHomeConsecutive: true,
+  })
+  const floaterOne = employee('floater-one', { name: 'Floater One', isFloating: true })
+  const floaterTwo = employee('floater-two', { name: 'Floater Two', isFloating: true })
+  const people = [doubleDayRegular, floaterOne, floaterTwo]
+  const schedule = {
+    days: [date],
+    weeks: [{ weekId: '2026-W23', workdays: [date] }],
+    alerts: [],
+    cells: Object.fromEntries(people.map((item) => [`${item.id}__${date}`, { employeeId: item.id, date, status: 'OFFICE', source: 'TEST', alerts: [] }])),
+  }
+
+  const resolved = resolveFloatingSeatShortages(schedule, people, [date], { ...params, seatsWeWork: 2, seats93: 0 })
+
+  assert.equal(resolved.cells[`${doubleDayRegular.id}__${date}`].status, 'OFFICE')
+  assert.ok(resolved.alerts.some((alert) => alert.rule === 'FLOATER_SEAT_CAPACITY_UNRESOLVED'))
+})
 test('daily summary counts floating seats by actual assigned location', () => {
   const date = '2026-06-01'
   const floater = employee('floater', { isFloating: true, baseLocation: 'WEWORK' })
