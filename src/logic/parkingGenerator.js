@@ -204,7 +204,7 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
       if (byLocation[location].unseated.length > 0) {
         alerts.push({
           id: `floater-${location}-${iso}`,
-          severity: 'WARNING',
+          severity: 'CRITICAL',
           date: iso,
           message: `${iso}: ${byLocation[location].unseated.length} flotante(s) sin puesto disponible en ${locationLabels[location]}.`,
           rule: 'FLOATER_NO_SEAT',

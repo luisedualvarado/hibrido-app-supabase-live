@@ -93,6 +93,10 @@ export function buildDailySummary(schedule, employees, days, params, parkingUsag
       daySummary.alerts.push(message)
     }
 
+    if (floating.unseated.length > 0) {
+      const message = `${iso}: ${floating.unseated.length} flotante(s) sin puesto asignado.`
+      daySummary.alerts.push(message)
+    }
     summary.push(daySummary)
   }
 

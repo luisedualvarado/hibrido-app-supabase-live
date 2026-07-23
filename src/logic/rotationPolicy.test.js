@@ -177,13 +177,14 @@ test('floating seats avoid desks occupied by their regular owner', () => {
     cells: Object.fromEntries(employees.map((item) => [`${item.id}__${date}`, { status: 'OFFICE', source: 'TEST', alerts: [] }])),
   }
 
-  const { result } = assignFloatingSeats(schedule, employees, [date], { ...params, seatsWeWork: 2, seats93: 0 })
+  const { result, alerts } = assignFloatingSeats(schedule, employees, [date], { ...params, seatsWeWork: 2, seats93: 0 })
 
   assert.equal(result[date].byLocation.WEWORK.assigned.length, 1)
   assert.equal(result[date].assignedByEmp[floaterOne.id]?.location, 'WEWORK')
   assert.equal(result[date].assignedByEmp[floaterOne.id]?.seat, '2')
   assert.equal(result[date].assignedByEmp[floaterTwo.id], undefined)
   assert.deepEqual(result[date].unseated, [floaterTwo.id])
+  assert.ok(alerts.some((alert) => alert.rule === 'FLOATER_NO_SEAT' && alert.severity === 'CRITICAL'))
 })
 
 test('daily summary counts floating seats by actual assigned location', () => {

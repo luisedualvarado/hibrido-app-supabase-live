@@ -877,6 +877,12 @@ export default function App() {
   const handlePublishSnapshot = useCallback(async () => {
     if (!LIVE_SYNC_ENABLED || !isAdmin) return true
 
+    const criticalAlerts = computed.allAlerts.filter((alert) => alert.severity === 'CRITICAL')
+    if (criticalAlerts.length > 0) {
+      window.alert(`No se puede publicar: hay ${criticalAlerts.length} alerta(s) critica(s). Revisa sobrecupos, flotantes sin puesto o conflictos de capacidad antes de publicar.`)
+      return false
+    }
+
     try {
       setLiveSyncStatus('publishing')
       setLiveSyncError('')
@@ -899,7 +905,7 @@ export default function App() {
       setLiveSyncError(error.message || 'No se pudo publicar el borrador actual.')
       return false
     }
-  }, [currentSnapshot, currentSnapshotJson, isAdmin, refreshLiveSyncHistory])
+  }, [computed.allAlerts, currentSnapshot, currentSnapshotJson, isAdmin, refreshLiveSyncHistory])
 
   useEffect(() => {
     publishBeforeLogoutRef.current = handlePublishSnapshot
