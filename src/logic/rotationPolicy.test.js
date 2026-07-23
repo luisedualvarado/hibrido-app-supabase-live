@@ -8,9 +8,14 @@ import { buildFloatingSeatEmployees, weeklyHomeTarget } from './rotationPolicy.j
 import { buildDailySummary } from './validators.js'
 import { initialEmployees } from '../data/initialEmployees.js'
 import { initialAbsences, initialHolidays, defaultParameters } from '../data/initialHolidays.js'
+import { PHYSICAL_SEATS_BY_LOCATION } from './deskLayouts.js'
 
 const params = { seatsWeWork: 20, seats93: 10, parkingSpots: 3, lockers: 36 }
 
+test('WeWork physical inventory excludes desks 24, 25 and 26', () => {
+  assert.equal(PHYSICAL_SEATS_BY_LOCATION.WEWORK.length, 36)
+  assert.deepEqual(PHYSICAL_SEATS_BY_LOCATION.WEWORK.filter((seat) => ['24', '25', '26'].includes(seat)), [])
+})
 function employee(id, overrides = {}) {
   return {
     id,
