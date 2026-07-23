@@ -12,6 +12,10 @@ const BLOCKED_FLOATING_SEATS_BY_LOCATION = {
 // (Editable; refleja lo discutido: Johana/Gabriel, luego Pinto/Alvarado, etc.)
 const ROTATION_SEED = ['jimenez-johana', 'garcia-gabriel', 'pinto-juan-felipe', 'alvarado-luis']
 
+function isSavedWeekGeneratedOverride(override) {
+  return typeof override?.reason === 'string' && /^Semana\s.+\sguardada$/i.test(override.reason)
+}
+
 // Asigna los N parqueaderos del mes por rotación entre los elegibles con carro.
 // monthIndex se usa para rotar la ventana de selección mes a mes.
 export function assignParkingForMonth(ctx) {
@@ -380,11 +384,15 @@ export function applyManualOverrides(schedule, manualOverrides, employees = [], 
         continue
       }
     }
+    const isSavedWeekOverride = isSavedWeekGeneratedOverride(ov)
     cells[key] = {
       ...cells[key],
       status: ov.status,
-      source: 'MANUAL',
-      alerts: [...(cells[key].alerts || []), 'Ajuste manual aplicado'],
+      source: isSavedWeekOverride ? 'SAVED' : 'MANUAL',
+      alerts: [
+        ...(cells[key].alerts || []),
+        isSavedWeekOverride ? 'Semana guardada' : 'Ajuste manual aplicado',
+      ],
     }
   }
   return { ...schedule, cells, alerts }

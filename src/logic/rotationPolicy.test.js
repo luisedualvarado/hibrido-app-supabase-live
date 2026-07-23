@@ -188,6 +188,37 @@ test('floating seats avoid desks occupied by their regular owner', () => {
 })
 
 
+test('saved week cells can be adjusted by operational capacity TC', () => {
+  const date = '2026-06-01'
+  const regular = employee('regular', { name: 'Regular', isFloating: false, baseSeat: '1' })
+  const floaterOne = employee('floater-one', { name: 'Floater One', isFloating: true })
+  const floaterTwo = employee('floater-two', { name: 'Floater Two', isFloating: true })
+  const people = [regular, floaterOne, floaterTwo]
+  const schedule = {
+    days: [date],
+    weeks: [{ weekId: '2026-W23', workdays: [date] }],
+    alerts: [],
+    cells: Object.fromEntries(people.map((item) => [`${item.id}__${date}`, { employeeId: item.id, date, status: 'OFFICE', source: 'AUTO', alerts: [] }])),
+  }
+  const saved = applyManualOverrides(schedule, [{
+    id: regular.id + '-' + date,
+    employeeId: regular.id,
+    date,
+    status: 'OFFICE',
+    reason: 'Semana 2026-W23 guardada',
+    createdAt: '2026-06-01T00:00:00.000Z',
+  }], people, { ...params, seatsWeWork: 3, seats93: 0 })
+
+  assert.equal(saved.cells[`${regular.id}__${date}`].source, 'SAVED')
+
+  const resolved = resolveFloatingSeatShortages(saved, people, [date], { ...params, seatsWeWork: 2, seats93: 0 })
+  const { result } = assignFloatingSeats(resolved, people, [date], { ...params, seatsWeWork: 2, seats93: 0 })
+
+  assert.equal(resolved.cells[`${regular.id}__${date}`].status, 'HOME')
+  assert.equal(resolved.cells[`${regular.id}__${date}`].source, 'CAPACITY')
+  assert.equal(result[date].unseated.length, 0)
+})
+
 test('floating shortage is resolved with operational capacity TC', () => {
   const date = '2026-06-01'
   const regular = employee('regular', { name: 'Regular', isFloating: false, baseSeat: '1' })
