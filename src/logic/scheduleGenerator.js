@@ -173,6 +173,11 @@ function scorePairForEmployee(employee, pair, ctx, seed, weekId) {
 function countHomeDays(cells, employeeId, days) {
   return days.filter((iso) => cells[`${employeeId}__${iso}`]?.status === 'HOME').length
 }
+function countOperationalHomeDays(cells, employeeId) {
+  return Object.values(cells).filter((cell) =>
+    cell?.employeeId === employeeId && cell.status === 'HOME' && cell.source === 'CAPACITY'
+  ).length
+}
 
 function hasAdjacentHome(cells, employeeId, iso, workdays) {
   const index = workdays.indexOf(iso)
@@ -295,7 +300,13 @@ function balanceOfficeCapacity({ employees, cells, days, weeks, holidays, params
           const operationalCandidate = orderedCandidates
             .filter((candidate) => week && canAssignHome(candidate, iso, cells, monthWorkdays))
             .filter((candidate) => countHomeDays(cells, candidate.id, week.workdays) < MAX_OPERATIONAL_HOME_DAYS)
-            .sort((a, b) => weeklyHomeTarget(a) - weeklyHomeTarget(b))[0]
+            .sort((a, b) => {
+              const targetDiff = weeklyHomeTarget(a) - weeklyHomeTarget(b)
+              if (targetDiff !== 0) return targetDiff
+              const usageDiff = countOperationalHomeDays(cells, a.id) - countOperationalHomeDays(cells, b.id)
+              if (usageDiff !== 0) return usageDiff
+              return seededTieBreaker(generationSeed, location, iso, a.id) - seededTieBreaker(generationSeed, location, iso, b.id)
+            })[0]
           if (!operationalCandidate) {
             addAlert?.('CRITICAL',
               `${iso}: el sobrecupo de ${officeName} no puede resolverse sin romper aprobacion o restriccion.`,

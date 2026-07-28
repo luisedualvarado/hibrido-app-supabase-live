@@ -363,6 +363,35 @@ test('floating operational capacity TC uses two-day hybrid employees only as las
   assert.equal(result[date].unseated.length, 0)
 })
 
+test('floating operational capacity TC sweeps one-day employees before reuse', () => {
+  const firstDate = '2026-06-01'
+  const secondDate = '2026-06-02'
+  const oneDayA = employee('one-day-a', { name: 'A One Day', isFloating: false, baseSeat: '1' })
+  const oneDayB = employee('one-day-b', { name: 'B One Day', isFloating: false, baseSeat: '2' })
+  const twoDay = employee('two-day', { name: 'C Two Day', isFloating: false, baseSeat: '4', doubleHomeConsecutive: true })
+  const floater = employee('floater', { name: 'Floater', isFloating: true })
+  const people = [oneDayA, oneDayB, twoDay, floater]
+  const days = [firstDate, secondDate]
+  const schedule = {
+    days,
+    weeks: [{ weekId: '2026-W23', workdays: days }],
+    alerts: [],
+    cells: Object.fromEntries(people.flatMap((person) => days.map((date) => [`${person.id}__${date}`, {
+      employeeId: person.id,
+      date,
+      status: 'OFFICE',
+      source: 'TEST',
+      alerts: [],
+    }]))),
+  }
+
+  const resolved = resolveFloatingSeatShortages(schedule, people, days, { ...params, seatsWeWork: 2, seats93: 0 })
+
+  assert.equal(resolved.cells[`${oneDayA.id}__${firstDate}`].source, 'CAPACITY')
+  assert.equal(resolved.cells[`${oneDayB.id}__${secondDate}`].source, 'CAPACITY')
+  assert.equal(resolved.cells[`${twoDay.id}__${firstDate}`].status, 'OFFICE')
+  assert.equal(resolved.cells[`${twoDay.id}__${secondDate}`].status, 'OFFICE')
+})
 test('floating operational capacity TC prefers one-day before two-day employees', () => {
   const date = '2026-06-01'
   const oneDayRegular = employee('one-day-regular', { name: 'A One Day', isFloating: false, baseSeat: '1' })

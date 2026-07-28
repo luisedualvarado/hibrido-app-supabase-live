@@ -239,6 +239,11 @@ function weekForDate(weeks, iso) {
 function countHomeDays(cells, employeeId, days = []) {
   return days.filter((iso) => cells[`${employeeId}__${iso}`]?.status === 'HOME').length
 }
+function countOperationalHomeDays(cells, employeeId) {
+  return Object.values(cells).filter((cell) =>
+    cell?.employeeId === employeeId && cell.status === 'HOME' && cell.source === 'CAPACITY'
+  ).length
+}
 function hasAdjacentHome(cells, employeeId, iso, workdays) {
   const index = workdays.indexOf(iso)
   const previous = index > 0 ? workdays[index - 1] : null
@@ -299,6 +304,9 @@ export function resolveFloatingSeatShortages(schedule, employees, days, params, 
         const leftTarget = weeklyHomeTarget(left)
         const rightTarget = weeklyHomeTarget(right)
         if (leftTarget !== rightTarget) return leftTarget - rightTarget
+        const leftOperationalUsed = countOperationalHomeDays(cells, left.id)
+        const rightOperationalUsed = countOperationalHomeDays(cells, right.id)
+        if (leftOperationalUsed !== rightOperationalUsed) return leftOperationalUsed - rightOperationalUsed
         const leftBlocked = blockedSeats[shortage.location]?.has(left.baseSeat) ? 1 : 0
         const rightBlocked = blockedSeats[shortage.location]?.has(right.baseSeat) ? 1 : 0
         if (leftBlocked !== rightBlocked) return leftBlocked - rightBlocked
