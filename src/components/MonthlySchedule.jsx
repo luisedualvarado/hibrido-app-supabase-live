@@ -4,14 +4,15 @@ import { isWeekend, weekdayKey, WEEKDAY_LABEL, dayOfMonth, prettyDate } from '..
 const STATUS_ABBR = { HOME: 'TC', VACATION: 'VAC', HOLIDAY: 'FES', ABSENCE: 'AUS', NOT_APPLICABLE: 'NA' }
 const byName = (a, b) => a.name.localeCompare(b.name, 'es')
 const RESTRICTION_ALERT = /^restricci[oó]n individual no se pudo cumplir$/i
-const CAPACITY_ALERT = /operativo por cupo|asignado automaticamente por cupo|para evitar sobrecupo/i
+const CAPACITY_ALERT = /operativo por cupo|asignado automaticamente por cupo/i
+const BALANCING_NOTICE = /para evitar sobrecupo/i
 
 function cellAlertTone(cell, isSaved = false) {
   const alerts = cell?.alerts || []
   if (!alerts.length) return ''
   if (alerts.some((alert) => RESTRICTION_ALERT.test(alert))) return 'red'
   const visibleAlerts = alerts.filter((alert) => {
-    if (CAPACITY_ALERT.test(alert)) return false
+    if (CAPACITY_ALERT.test(alert) || BALANCING_NOTICE.test(alert)) return false
     if (isSaved && /ajuste manual aplicado/i.test(alert)) return false
     return true
   })
