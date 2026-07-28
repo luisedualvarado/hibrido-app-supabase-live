@@ -447,14 +447,14 @@ test('floating capacity TC does not exceed two weekly TC days', () => {
   assert.equal(resolved.cells[`${availableRegular.id}__${date}`].source, 'CAPACITY')
   assert.equal(days.filter((iso) => resolved.cells[`${cappedRegular.id}__${iso}`].status === 'HOME').length, 2)
 })
-test('floating seat rule overrides weekly TC cap as last resort', () => {
+test('floating seat rule rebalances TC before exceeding weekly cap', () => {
   const date = '2026-06-03'
   const previousOne = '2026-06-01'
   const previousTwo = '2026-06-02'
   const cappedRegular = employee('capped-regular', { name: 'Capped Regular', isFloating: false, baseSeat: '1' })
+  const alternativeRegular = employee('alternative-regular', { name: 'Alternative Regular', isFloating: false, baseSeat: '2' })
   const floaterOne = employee('floater-one', { name: 'Floater One', isFloating: true })
-  const floaterTwo = employee('floater-two', { name: 'Floater Two', isFloating: true })
-  const people = [cappedRegular, floaterOne, floaterTwo]
+  const people = [cappedRegular, alternativeRegular, floaterOne]
   const days = [previousOne, previousTwo, date]
   const schedule = {
     days,
@@ -470,6 +470,7 @@ test('floating seat rule overrides weekly TC cap as last resort', () => {
   }
   schedule.cells[`${cappedRegular.id}__${previousOne}`].status = 'HOME'
   schedule.cells[`${cappedRegular.id}__${previousTwo}`].status = 'HOME'
+  schedule.cells[`${alternativeRegular.id}__${date}`].source = 'MANUAL'
 
   const resolved = resolveFloatingSeatShortages(schedule, people, [date], { ...params, seatsWeWork: 2, seats93: 0 })
   const { result } = assignFloatingSeats(resolved, people, [date], { ...params, seatsWeWork: 2, seats93: 0 })
@@ -477,6 +478,8 @@ test('floating seat rule overrides weekly TC cap as last resort', () => {
   assert.equal(resolved.cells[`${cappedRegular.id}__${date}`].status, 'HOME')
   assert.equal(resolved.cells[`${cappedRegular.id}__${date}`].source, 'CAPACITY')
   assert.equal(result[date].unseated.length, 0)
+  assert.equal(days.filter((iso) => resolved.cells[`${cappedRegular.id}__${iso}`].status === 'HOME').length, 2)
+  assert.ok(days.some((iso) => resolved.cells[`${alternativeRegular.id}__${iso}`].status === 'HOME'))
   assert.ok(resolved.cells[`${cappedRegular.id}__${date}`].alerts.some((alert) => /excepcional/i.test(alert)))
 })
 test('daily summary counts floating seats by actual assigned location', () => {

@@ -279,6 +279,47 @@ function setOperationalHome(cells, employee, iso, locationLabel, exceptional = f
   }
 }
 
+function moveExistingHomeToAlternative(cells, employees, employee, targetIso, week) {
+  if (!week) return false
+  const previousHomeDays = week.workdays.filter((iso) => iso !== targetIso && cells[`${employee.id}__${iso}`]?.status === 'HOME')
+  const alternatives = employees
+    .filter((candidate) => candidate.id !== employee.id)
+    .filter((candidate) => !candidate.isFloating && candidate.baseLocation === employee.baseLocation)
+    .filter((candidate) => isRotationEligible(candidate))
+    .sort((left, right) => {
+      const targetDiff = weeklyHomeTarget(left) - weeklyHomeTarget(right)
+      if (targetDiff !== 0) return targetDiff
+      const usageDiff = countOperationalHomeDays(cells, left.id) - countOperationalHomeDays(cells, right.id)
+      if (usageDiff !== 0) return usageDiff
+      return left.name.localeCompare(right.name, 'es')
+    })
+
+  for (const oldIso of previousHomeDays) {
+    for (const alternative of alternatives) {
+      const altKey = `${alternative.id}__${oldIso}`
+      if (cells[altKey]?.status !== 'OFFICE' || cells[altKey]?.source === 'MANUAL') continue
+      if (countHomeDays(cells, alternative.id, week.workdays) >= MAX_OPERATIONAL_HOME_DAYS) continue
+      if (hasHardRestriction(alternative) && !isDateAllowedForEmployee(alternative, oldIso)) continue
+      if (alternative.avoidConsecutiveHomeDays && hasAdjacentHome(cells, alternative.id, oldIso, week.workdays)) continue
+
+      const oldKey = `${employee.id}__${oldIso}`
+      cells[oldKey] = {
+        ...cells[oldKey],
+        status: 'OFFICE',
+        source: 'CAPACITY',
+        alerts: [...(cells[oldKey].alerts || []), 'TC operativo movido para garantizar puesto flotante'],
+      }
+      cells[altKey] = {
+        ...cells[altKey],
+        status: 'HOME',
+        source: 'CAPACITY',
+        alerts: [...(cells[altKey].alerts || []), 'TC operativo reasignado para garantizar puesto flotante'],
+      }
+      return true
+    }
+  }
+  return false
+}
 export function resolveFloatingSeatShortages(schedule, employees, days, params, manualDeskAssignments = []) {
   const cells = { ...schedule.cells }
   const alerts = [...(schedule.alerts || [])]
@@ -315,9 +356,17 @@ export function resolveFloatingSeatShortages(schedule, employees, days, params, 
       })
 
     const normalCandidates = buildCandidates(false)
-    const exceptional = normalCandidates.length === 0
-    const candidates = exceptional ? buildCandidates(true) : normalCandidates
-    const candidate = candidates[0]
+    let exceptional = false
+    let candidate = normalCandidates[0]
+    if (!candidate) {
+      for (const overMaxCandidate of buildCandidates(true)) {
+        if (moveExistingHomeToAlternative(cells, employees, overMaxCandidate, shortage.iso, week)) {
+          candidate = overMaxCandidate
+          exceptional = true
+          break
+        }
+      }
+    }
     if (!candidate) {
       alerts.push({
         id: `FLOATER_SEAT_CAPACITY_UNRESOLVED-${alerts.length}`,
