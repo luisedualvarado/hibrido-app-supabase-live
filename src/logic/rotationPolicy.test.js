@@ -16,6 +16,25 @@ test('WeWork physical inventory excludes desks 24, 25 and 26', () => {
   assert.equal(PHYSICAL_SEATS_BY_LOCATION.WEWORK.length, 36)
   assert.deepEqual(PHYSICAL_SEATS_BY_LOCATION.WEWORK.filter((seat) => ['24', '25', '26'].includes(seat)), [])
 })
+
+test('WeWork desk 3 can be assigned to a floater when free', () => {
+  const date = '2026-06-01'
+  const regularOne = employee('regular-one', { isFloating: false, baseSeat: '1' })
+  const regularTwo = employee('regular-two', { isFloating: false, baseSeat: '2' })
+  const floater = employee('floater', { isFloating: true })
+  const people = [regularOne, regularTwo, floater]
+  const schedule = {
+    days: [date],
+    weeks: [{ weekId: '2026-W23', workdays: [date] }],
+    alerts: [],
+    cells: Object.fromEntries(people.map((item) => [`${item.id}__${date}`, { employeeId: item.id, date, status: 'OFFICE', source: 'TEST', alerts: [] }])),
+  }
+
+  const { result } = assignFloatingSeats(schedule, people, [date], { ...params, seatsWeWork: 3, seats93: 0 })
+
+  assert.equal(result[date].assignedByEmp[floater.id]?.seat, '3')
+  assert.equal(result[date].unseated.length, 0)
+})
 function employee(id, overrides = {}) {
   return {
     id,
@@ -480,6 +499,37 @@ test('floating seat rule rebalances TC before exceeding weekly cap', () => {
   assert.equal(result[date].unseated.length, 0)
   assert.equal(days.filter((iso) => resolved.cells[`${cappedRegular.id}__${iso}`].status === 'HOME').length, 2)
   assert.ok(days.some((iso) => resolved.cells[`${alternativeRegular.id}__${iso}`].status === 'HOME'))
+  assert.ok(resolved.cells[`${cappedRegular.id}__${date}`].alerts.some((alert) => /excepcional/i.test(alert)))
+})
+test('floating seat rule uses exceptional TC instead of leaving a floater without seat', () => {
+  const date = '2026-06-03'
+  const previousOne = '2026-06-01'
+  const previousTwo = '2026-06-02'
+  const cappedRegular = employee('capped-regular', { name: 'Capped Regular', isFloating: false, baseSeat: '1' })
+  const floater = employee('floater', { name: 'Floater', isFloating: true })
+  const people = [cappedRegular, floater]
+  const days = [previousOne, previousTwo, date]
+  const schedule = {
+    days,
+    weeks: [{ weekId: '2026-W23', workdays: days }],
+    alerts: [],
+    cells: Object.fromEntries(people.flatMap((person) => days.map((iso) => [`${person.id}__${iso}`, {
+      employeeId: person.id,
+      date: iso,
+      status: 'OFFICE',
+      source: 'TEST',
+      alerts: [],
+    }]))),
+  }
+  schedule.cells[`${cappedRegular.id}__${previousOne}`].status = 'HOME'
+  schedule.cells[`${cappedRegular.id}__${previousTwo}`].status = 'HOME'
+
+  const resolved = resolveFloatingSeatShortages(schedule, people, [date], { ...params, seatsWeWork: 1, seats93: 0 })
+  const { result } = assignFloatingSeats(resolved, people, [date], { ...params, seatsWeWork: 1, seats93: 0 })
+
+  assert.equal(resolved.cells[`${cappedRegular.id}__${date}`].status, 'HOME')
+  assert.equal(resolved.cells[`${cappedRegular.id}__${date}`].source, 'CAPACITY')
+  assert.equal(result[date].unseated.length, 0)
   assert.ok(resolved.cells[`${cappedRegular.id}__${date}`].alerts.some((alert) => /excepcional/i.test(alert)))
 })
 test('daily summary counts floating seats by actual assigned location', () => {

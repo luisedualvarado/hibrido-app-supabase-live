@@ -6,7 +6,7 @@ import { hasHardRestriction, isDateAllowedForEmployee, isFloatingSeatEligible, i
 const MAX_OPERATIONAL_HOME_DAYS = 2
 
 const BLOCKED_FLOATING_SEATS_BY_LOCATION = {
-  WEWORK: new Set(['3']),
+  WEWORK: new Set(),
   OFICINA_93: new Set(),
 }
 
@@ -366,6 +366,10 @@ export function resolveFloatingSeatShortages(schedule, employees, days, params, 
           break
         }
       }
+    }
+    if (!candidate) {
+      candidate = buildCandidates(true)[0]
+      exceptional = Boolean(candidate)
     }
     if (!candidate) {
       alerts.push({
