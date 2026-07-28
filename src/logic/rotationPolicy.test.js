@@ -128,50 +128,51 @@ test('manual office adjustment is accepted and capacity is rebalanced', () => {
   assert.ok(people.some((person) => person.id !== manualPerson.id && balanced.cells[`${person.id}__${date}`].source === 'CAPACITY'))
 })
 
-test('manual TC cannot break approval, restriction or weekly target', () => {
+test('manual TC overrides approval, restrictions and weekly targets', () => {
   const fixed = employee('fixed', { restrictionType: 'FIXED_DAY', fixedDay: 'WEDNESDAY' })
   const unrestricted = employee('unrestricted')
   const notApproved = employee('not-approved', { hybridApproved: false })
   const schedule = generate([fixed, unrestricted, notApproved])
   const week = schedule.weeks[0]
   const invalidFixedDay = week.workdays.find((date) => weekdayKey(date) !== 'WEDNESDAY')
-  const approvedHome = homeDays(schedule, fixed.id, week.workdays)[0]
-  const extraValidDay = week.workdays.find((date) => date !== approvedHome)
   const unrestrictedHome = homeDays(schedule, unrestricted.id, week.workdays)[0]
   const unrestrictedExtra = week.workdays.find((date) => date !== unrestrictedHome)
 
   const result = applyManualOverrides(schedule, [
     { employeeId: notApproved.id, date: week.workdays[0], status: 'HOME' },
     { employeeId: fixed.id, date: invalidFixedDay, status: 'HOME' },
-    { employeeId: fixed.id, date: extraValidDay, status: 'HOME' },
     { employeeId: unrestricted.id, date: unrestrictedExtra, status: 'HOME' },
   ], [fixed, unrestricted, notApproved], params)
 
-  assert.equal(result.cells[`${notApproved.id}__${week.workdays[0]}`].status, 'OFFICE')
-  assert.equal(result.cells[`${fixed.id}__${invalidFixedDay}`].status, 'OFFICE')
-  assert.equal(homeDays(result, fixed.id, week.workdays).length, 1)
-  assert.equal(result.cells[`${unrestricted.id}__${unrestrictedExtra}`].status, 'OFFICE')
-  assert.ok(result.alerts.some((alert) => alert.rule === 'MANUAL_HOME_NOT_APPROVED'))
-  assert.ok(result.alerts.some((alert) => alert.rule === 'MANUAL_HOME_RESTRICTION'))
-  assert.ok(result.alerts.some((alert) => alert.rule === 'MANUAL_HOME_LIMIT'))
+  assert.equal(result.cells[`${notApproved.id}__${week.workdays[0]}`].status, 'HOME')
+  assert.equal(result.cells[`${notApproved.id}__${week.workdays[0]}`].source, 'MANUAL')
+  assert.equal(result.cells[`${fixed.id}__${invalidFixedDay}`].status, 'HOME')
+  assert.equal(result.cells[`${fixed.id}__${invalidFixedDay}`].source, 'MANUAL')
+  assert.equal(result.cells[`${unrestricted.id}__${unrestrictedExtra}`].status, 'HOME')
+  assert.equal(result.cells[`${unrestricted.id}__${unrestrictedExtra}`].source, 'MANUAL')
 })
 
-test('manual TC still cannot exceed weekly target even with capacity wording', () => {
+test('manual adjustment can override vacation or absence cells', () => {
   const approved = employee('approved')
   const schedule = generate([approved])
-  const week = schedule.weeks[0]
-  const [firstHomeDate] = homeDays(schedule, approved.id, week.workdays)
-  const extraOfficeDate = week.workdays.find((date) => date !== firstHomeDate && schedule.cells[`${approved.id}__${date}`]?.status === 'OFFICE')
+  const date = schedule.weeks[0].workdays[0]
+  schedule.cells[`${approved.id}__${date}`] = {
+    ...schedule.cells[`${approved.id}__${date}`],
+    status: 'VACATION',
+    source: 'SYSTEM',
+  }
+
   const result = applyManualOverrides(schedule, [{
     employeeId: approved.id,
-    date: extraOfficeDate,
-    status: 'HOME',
-    reason: 'Ajuste operativo por cupo',
+    date,
+    status: 'OFFICE',
+    reason: 'Correccion manual',
   }], [approved], params)
 
-  assert.equal(result.cells[`${approved.id}__${extraOfficeDate}`].status, 'OFFICE')
-  assert.ok(result.alerts.some((alert) => alert.rule === 'MANUAL_HOME_LIMIT'))
+  assert.equal(result.cells[`${approved.id}__${date}`].status, 'OFFICE')
+  assert.equal(result.cells[`${approved.id}__${date}`].source, 'MANUAL')
 })
+
 test('final policy removes invalid TC introduced by legacy published data', () => {
   const notApproved = employee('not-approved', { hybridApproved: false })
   const schedule = generate([notApproved])

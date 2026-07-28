@@ -219,7 +219,6 @@ function CellEditModal({ employee, iso, cell, existingOverride, onClose, onSave,
   const [status, setStatus] = useState(cell.status)
   const [reason, setReason] = useState(existingOverride?.reason || '')
   const SOURCE = { AUTO: 'Automático', CAPACITY: 'Automático por cupo', MANUAL: 'Manual', SYSTEM: 'Sistema' }
-  const canAssignHome = employee.isActive && employee.hybridApproved && employee.baseLocation !== 'REMOTO'
   return (
     <div className="overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -257,12 +256,11 @@ function CellEditModal({ employee, iso, cell, existingOverride, onClose, onSave,
           <div className="field">
             <label>Nuevo estado</label>
             <select value={status} onChange={(e) => setStatus(e.target.value)}>
-              {canAssignHome && <option value="HOME">Trabajo en casa (TC)</option>}
+              <option value="HOME">Trabajo en casa (TC)</option>
               <option value="OFFICE">Oficina presencial</option>
               <option value="VACATION">Vacaciones (VAC)</option>
               <option value="ABSENCE">Ausencia (AUS)</option>
             </select>
-            {!canAssignHome && <div className="muted" style={{ marginTop: 6 }}>Esta persona no tiene híbrido aprobado; no se puede forzar TC.</div>}
           </div>
           <div className="field">
             <label>Observación</label>
