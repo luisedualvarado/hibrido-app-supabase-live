@@ -447,6 +447,38 @@ test('floating capacity TC does not exceed two weekly TC days', () => {
   assert.equal(resolved.cells[`${availableRegular.id}__${date}`].source, 'CAPACITY')
   assert.equal(days.filter((iso) => resolved.cells[`${cappedRegular.id}__${iso}`].status === 'HOME').length, 2)
 })
+test('floating seat rule overrides weekly TC cap as last resort', () => {
+  const date = '2026-06-03'
+  const previousOne = '2026-06-01'
+  const previousTwo = '2026-06-02'
+  const cappedRegular = employee('capped-regular', { name: 'Capped Regular', isFloating: false, baseSeat: '1' })
+  const floaterOne = employee('floater-one', { name: 'Floater One', isFloating: true })
+  const floaterTwo = employee('floater-two', { name: 'Floater Two', isFloating: true })
+  const people = [cappedRegular, floaterOne, floaterTwo]
+  const days = [previousOne, previousTwo, date]
+  const schedule = {
+    days,
+    weeks: [{ weekId: '2026-W23', workdays: days }],
+    alerts: [],
+    cells: Object.fromEntries(people.flatMap((person) => days.map((iso) => [`${person.id}__${iso}`, {
+      employeeId: person.id,
+      date: iso,
+      status: 'OFFICE',
+      source: 'TEST',
+      alerts: [],
+    }]))),
+  }
+  schedule.cells[`${cappedRegular.id}__${previousOne}`].status = 'HOME'
+  schedule.cells[`${cappedRegular.id}__${previousTwo}`].status = 'HOME'
+
+  const resolved = resolveFloatingSeatShortages(schedule, people, [date], { ...params, seatsWeWork: 2, seats93: 0 })
+  const { result } = assignFloatingSeats(resolved, people, [date], { ...params, seatsWeWork: 2, seats93: 0 })
+
+  assert.equal(resolved.cells[`${cappedRegular.id}__${date}`].status, 'HOME')
+  assert.equal(resolved.cells[`${cappedRegular.id}__${date}`].source, 'CAPACITY')
+  assert.equal(result[date].unseated.length, 0)
+  assert.ok(resolved.cells[`${cappedRegular.id}__${date}`].alerts.some((alert) => /excepcional/i.test(alert)))
+})
 test('daily summary counts floating seats by actual assigned location', () => {
   const date = '2026-06-01'
   const floater = employee('floater', { isFloating: true, baseLocation: 'WEWORK' })

@@ -254,17 +254,17 @@ function hasAdjacentHome(cells, employeeId, iso, workdays) {
   )
 }
 
-function canUseOperationalHome(employee, iso, cells, week) {
+function canUseOperationalHome(employee, iso, cells, week, allowOverMax = false) {
   const cell = cells[`${employee.id}__${iso}`]
   if (!cell || cell.status !== 'OFFICE' || cell.source === 'MANUAL') return false
   if (!isRotationEligible(employee)) return false
-  if (week && countHomeDays(cells, employee.id, week.workdays) >= MAX_OPERATIONAL_HOME_DAYS) return false
+  if (!allowOverMax && week && countHomeDays(cells, employee.id, week.workdays) >= MAX_OPERATIONAL_HOME_DAYS) return false
   if (hasHardRestriction(employee) && !isDateAllowedForEmployee(employee, iso)) return false
   if (employee.avoidConsecutiveHomeDays && week && hasAdjacentHome(cells, employee.id, iso, week.workdays)) return false
   return true
 }
 
-function setOperationalHome(cells, employee, iso, locationLabel) {
+function setOperationalHome(cells, employee, iso, locationLabel, exceptional = false) {
   const key = `${employee.id}__${iso}`
   cells[key] = {
     ...cells[key],
@@ -274,6 +274,7 @@ function setOperationalHome(cells, employee, iso, locationLabel) {
       ...(cells[key].alerts || []),
       'Asignado automaticamente por cupo',
       `TC operativo por cupo para garantizar puesto flotante en ${locationLabel}`,
+      ...(exceptional ? ['TC operativo excepcional: se prioriza garantizar puesto flotante'] : []),
     ],
   }
 }
@@ -297,9 +298,9 @@ export function resolveFloatingSeatShortages(schedule, employees, days, params, 
     if (!shortage) return currentSchedule
 
     const week = weekForDate(schedule.weeks, shortage.iso)
-    const candidates = employees
+    const buildCandidates = (allowOverMax = false) => employees
       .filter((employee) => !employee.isFloating && employee.baseLocation === shortage.location)
-      .filter((employee) => canUseOperationalHome(employee, shortage.iso, cells, week))
+      .filter((employee) => canUseOperationalHome(employee, shortage.iso, cells, week, allowOverMax))
       .sort((left, right) => {
         const leftTarget = weeklyHomeTarget(left)
         const rightTarget = weeklyHomeTarget(right)
@@ -313,6 +314,9 @@ export function resolveFloatingSeatShortages(schedule, employees, days, params, 
         return left.name.localeCompare(right.name, 'es')
       })
 
+    const normalCandidates = buildCandidates(false)
+    const exceptional = normalCandidates.length === 0
+    const candidates = exceptional ? buildCandidates(true) : normalCandidates
     const candidate = candidates[0]
     if (!candidate) {
       alerts.push({
@@ -326,13 +330,13 @@ export function resolveFloatingSeatShortages(schedule, employees, days, params, 
       return currentSchedule
     }
 
-    setOperationalHome(cells, candidate, shortage.iso, locationLabels[shortage.location])
+    setOperationalHome(cells, candidate, shortage.iso, locationLabels[shortage.location], exceptional)
     alerts.push({
       id: `FLOATER_SEAT_CAPACITY_HOME_ASSIGNED-${alerts.length}`,
       severity: 'INFO',
       date: shortage.iso,
       employeeId: candidate.id,
-      message: `${shortage.iso}: ${candidate.name} queda en TC operativo para liberar puesto flotante en ${locationLabels[shortage.location]}.`,
+      message: `${shortage.iso}: ${candidate.name} queda en TC operativo${exceptional ? ' excepcional' : ''} para liberar puesto flotante en ${locationLabels[shortage.location]}.`,
       rule: 'FLOATER_SEAT_CAPACITY_HOME_ASSIGNED',
       location: shortage.location,
     })
