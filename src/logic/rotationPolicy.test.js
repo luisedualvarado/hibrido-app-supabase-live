@@ -105,6 +105,30 @@ test('capacity balancing uses automatic capacity TC without sending non-approved
   assert.ok(balanced.days.some((date) => balanced.cells[`approved__${date}`]?.source === 'CAPACITY'))
   assert.ok(balanced.alerts.some((alert) => alert.rule === 'WEWORK_CAPACITY_HOME_ASSIGNED'))
 })
+
+test('office capacity TC prefers one-day before two-day employees', () => {
+  const date = '2026-06-01'
+  const oneDay = employee('one-day', { name: 'A One Day' })
+  const twoDay = employee('two-day', { name: 'B Two Day', doubleHomeConsecutive: true })
+  const people = [twoDay, oneDay]
+  const schedule = {
+    days: [date],
+    weeks: [{ weekId: '2026-W23', workdays: [date] }],
+    alerts: [],
+    cells: Object.fromEntries(people.map((person) => [`${person.id}__${date}`, {
+      employeeId: person.id,
+      date,
+      status: 'OFFICE',
+      source: 'TEST',
+      alerts: [],
+    }])),
+  }
+
+  const balanced = enforceNoOfficeOvercapacity(schedule, people, [], { ...params, seatsWeWork: 1 }, 'one-before-two')
+
+  assert.equal(balanced.cells[`${oneDay.id}__${date}`].status, 'HOME')
+  assert.equal(balanced.cells[`${twoDay.id}__${date}`].status, 'OFFICE')
+})
 test('manual office adjustment is accepted and capacity is rebalanced', () => {
   const manualPerson = employee('manual-person', { name: 'Manual Person' })
   const regularOne = employee('regular-one', { name: 'Regular One' })

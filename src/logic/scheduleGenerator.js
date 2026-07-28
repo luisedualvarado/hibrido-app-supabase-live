@@ -260,6 +260,9 @@ function balanceOfficeCapacity({ employees, cells, days, weeks, holidays, params
           const aCanRespect = canAssignHome(a, iso, cells, monthWorkdays)
           const bCanRespect = canAssignHome(b, iso, cells, monthWorkdays)
           if (aCanRespect !== bCanRespect) return aCanRespect ? -1 : 1
+          const aTarget = weeklyHomeTarget(a)
+          const bTarget = weeklyHomeTarget(b)
+          if (aTarget !== bTarget) return aTarget - bTarget
           return seededTieBreaker(generationSeed, location, iso, a.id) - seededTieBreaker(generationSeed, location, iso, b.id)
         })
 
