@@ -129,14 +129,63 @@ test('office capacity TC prefers one-day before two-day employees', () => {
   assert.equal(balanced.cells[`${oneDay.id}__${date}`].status, 'HOME')
   assert.equal(balanced.cells[`${twoDay.id}__${date}`].status, 'OFFICE')
 })
+test('office capacity TC does not exceed two weekly TC days', () => {
+  const date = '2026-06-03'
+  const previousOne = '2026-06-01'
+  const previousTwo = '2026-06-02'
+  const cappedOneDay = employee('capped-one-day', { name: 'A Capped One Day' })
+  const cappedTwoDay = employee('capped-two-day', { name: 'B Capped Two Day', doubleHomeConsecutive: true })
+  const availableOneDay = employee('available-one-day', { name: 'C Available One Day' })
+  const people = [cappedOneDay, cappedTwoDay, availableOneDay]
+  const days = [previousOne, previousTwo, date]
+  const schedule = {
+    days,
+    weeks: [{ weekId: '2026-W23', workdays: days }],
+    alerts: [],
+    cells: Object.fromEntries(people.flatMap((person) => days.map((iso) => [`${person.id}__${iso}`, {
+      employeeId: person.id,
+      date: iso,
+      status: 'OFFICE',
+      source: 'TEST',
+      alerts: [],
+    }]))),
+  }
+  schedule.cells[`${cappedOneDay.id}__${previousOne}`].status = 'HOME'
+  schedule.cells[`${cappedOneDay.id}__${previousTwo}`].status = 'HOME'
+  schedule.cells[`${cappedTwoDay.id}__${previousOne}`].status = 'HOME'
+  schedule.cells[`${cappedTwoDay.id}__${previousTwo}`].status = 'HOME'
+  schedule.cells[`${availableOneDay.id}__${previousOne}`].status = 'HOME'
+
+  const balanced = enforceNoOfficeOvercapacity(schedule, people, [], { ...params, seatsWeWork: 2 }, 'max-two-capacity')
+
+  assert.equal(people.filter((person) => balanced.cells[`${person.id}__${date}`].status === 'OFFICE').length, 2)
+  for (const person of people) {
+    assert.ok(days.filter((iso) => balanced.cells[`${person.id}__${iso}`].status === 'HOME').length <= 2)
+  }
+})
 test('manual office adjustment is accepted and capacity is rebalanced', () => {
+  const date = '2026-06-03'
+  const previousOne = '2026-06-01'
+  const previousTwo = '2026-06-02'
   const manualPerson = employee('manual-person', { name: 'Manual Person' })
   const regularOne = employee('regular-one', { name: 'Regular One' })
   const regularTwo = employee('regular-two', { name: 'Regular Two' })
   const people = [manualPerson, regularOne, regularTwo]
-  const schedule = generate(people, { ...params, seatsWeWork: 2 })
-  const week = schedule.weeks[0]
-  const date = homeDays(schedule, manualPerson.id, week.workdays)[0]
+  const days = [previousOne, previousTwo, date]
+  const schedule = {
+    days,
+    weeks: [{ weekId: '2026-W23', workdays: days }],
+    alerts: [],
+    cells: Object.fromEntries(people.flatMap((person) => days.map((iso) => [`${person.id}__${iso}`, {
+      employeeId: person.id,
+      date: iso,
+      status: 'OFFICE',
+      source: 'TEST',
+      alerts: [],
+    }]))),
+  }
+  schedule.cells[`${regularOne.id}__${previousOne}`].status = 'HOME'
+  schedule.cells[`${regularTwo.id}__${previousTwo}`].status = 'HOME'
 
   const withManualOffice = applyManualOverrides(schedule, [{
     employeeId: manualPerson.id,
@@ -151,7 +200,6 @@ test('manual office adjustment is accepted and capacity is rebalanced', () => {
   assert.equal(people.filter((person) => balanced.cells[`${person.id}__${date}`].status === 'OFFICE').length, 2)
   assert.ok(people.some((person) => person.id !== manualPerson.id && balanced.cells[`${person.id}__${date}`].source === 'CAPACITY'))
 })
-
 test('manual TC overrides approval, restrictions and weekly targets', () => {
   const fixed = employee('fixed', { restrictionType: 'FIXED_DAY', fixedDay: 'WEDNESDAY' })
   const unrestricted = employee('unrestricted')
@@ -340,6 +388,36 @@ test('floating operational capacity TC prefers one-day before two-day employees'
   assert.equal(resolved.cells[`${doubleDayRegular.id}__${date}`].status, 'OFFICE')
 })
 
+test('floating capacity TC does not exceed two weekly TC days', () => {
+  const date = '2026-06-03'
+  const previousOne = '2026-06-01'
+  const previousTwo = '2026-06-02'
+  const cappedRegular = employee('capped-regular', { name: 'A Capped Regular', isFloating: false, baseSeat: '1' })
+  const availableRegular = employee('available-regular', { name: 'B Available Regular', isFloating: false, baseSeat: '2' })
+  const floater = employee('floater', { name: 'Floater', isFloating: true })
+  const people = [cappedRegular, availableRegular, floater]
+  const days = [previousOne, previousTwo, date]
+  const schedule = {
+    days,
+    weeks: [{ weekId: '2026-W23', workdays: days }],
+    alerts: [],
+    cells: Object.fromEntries(people.flatMap((person) => days.map((iso) => [`${person.id}__${iso}`, {
+      employeeId: person.id,
+      date: iso,
+      status: 'OFFICE',
+      source: 'TEST',
+      alerts: [],
+    }]))),
+  }
+  schedule.cells[`${cappedRegular.id}__${previousOne}`].status = 'HOME'
+  schedule.cells[`${cappedRegular.id}__${previousTwo}`].status = 'HOME'
+
+  const resolved = resolveFloatingSeatShortages(schedule, people, [date], { ...params, seatsWeWork: 2, seats93: 0 })
+
+  assert.equal(resolved.cells[`${availableRegular.id}__${date}`].status, 'HOME')
+  assert.equal(resolved.cells[`${availableRegular.id}__${date}`].source, 'CAPACITY')
+  assert.equal(days.filter((iso) => resolved.cells[`${cappedRegular.id}__${iso}`].status === 'HOME').length, 2)
+})
 test('daily summary counts floating seats by actual assigned location', () => {
   const date = '2026-06-01'
   const floater = employee('floater', { isFloating: true, baseLocation: 'WEWORK' })

@@ -21,6 +21,8 @@ import {
   weeklyHomeTarget,
 } from './rotationPolicy.js'
 
+const MAX_OPERATIONAL_HOME_DAYS = 2
+
 function seededTieBreaker(seed, ...parts) {
   const text = `${seed}::${parts.join('::')}`
   let hash = 2166136261
@@ -292,6 +294,7 @@ function balanceOfficeCapacity({ employees, cells, days, weeks, holidays, params
         if (!extraCandidate) {
           const operationalCandidate = orderedCandidates
             .filter((candidate) => week && canAssignHome(candidate, iso, cells, monthWorkdays))
+            .filter((candidate) => countHomeDays(cells, candidate.id, week.workdays) < MAX_OPERATIONAL_HOME_DAYS)
             .sort((a, b) => weeklyHomeTarget(a) - weeklyHomeTarget(b))[0]
           if (!operationalCandidate) {
             addAlert?.('CRITICAL',

@@ -3,6 +3,8 @@ import { weekdayKey } from './dateUtils.js'
 import { PHYSICAL_SEATS_BY_LOCATION } from './deskLayouts.js'
 import { hasHardRestriction, isDateAllowedForEmployee, isFloatingSeatEligible, isRotationEligible, weeklyHomeTarget } from './rotationPolicy.js'
 
+const MAX_OPERATIONAL_HOME_DAYS = 2
+
 const BLOCKED_FLOATING_SEATS_BY_LOCATION = {
   WEWORK: new Set(['3']),
   OFICINA_93: new Set(),
@@ -234,6 +236,9 @@ function weekForDate(weeks, iso) {
   return weeks?.find((week) => week.workdays.includes(iso))
 }
 
+function countHomeDays(cells, employeeId, days = []) {
+  return days.filter((iso) => cells[`${employeeId}__${iso}`]?.status === 'HOME').length
+}
 function hasAdjacentHome(cells, employeeId, iso, workdays) {
   const index = workdays.indexOf(iso)
   const previous = index > 0 ? workdays[index - 1] : null
@@ -248,6 +253,7 @@ function canUseOperationalHome(employee, iso, cells, week) {
   const cell = cells[`${employee.id}__${iso}`]
   if (!cell || cell.status !== 'OFFICE' || cell.source === 'MANUAL') return false
   if (!isRotationEligible(employee)) return false
+  if (week && countHomeDays(cells, employee.id, week.workdays) >= MAX_OPERATIONAL_HOME_DAYS) return false
   if (hasHardRestriction(employee) && !isDateAllowedForEmployee(employee, iso)) return false
   if (employee.avoidConsecutiveHomeDays && week && hasAdjacentHome(cells, employee.id, iso, week.workdays)) return false
   return true
