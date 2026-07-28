@@ -21,6 +21,10 @@ function alertBadgeTone(alert) {
   if (CAPACITY_ALERT.test(alert)) return 'green'
   return RESTRICTION_ALERT.test(alert) ? 'red' : 'amber'
 }
+function isCapacityCell(cell) {
+  return cell?.source === 'CAPACITY' || (cell?.alerts || []).some((alert) => CAPACITY_ALERT.test(alert))
+}
+
 function cellLabel(cell, employee) {
   if (employee.baseLocation === 'REMOTO' && cell.status === 'NOT_APPLICABLE') return 'REM'
   if (cell.status === 'OFFICE') return employee.baseLocation === 'OFICINA_93' ? '93' : 'WW'
@@ -171,7 +175,7 @@ export default function MonthlySchedule({
                   const isSaved = savedDates.has(iso)
                   const alertTone = hideAlerts ? '' : cellAlertTone(c, isSaved)
                   const isManual = c.source === 'MANUAL' && !isSaved
-                  const isCapacity = c.source === 'CAPACITY'
+                  const isCapacity = isCapacityCell(c)
                   const showCellOutline = !hideAlerts && !readOnly
                   return (
                     <td key={iso} className="daycell">
