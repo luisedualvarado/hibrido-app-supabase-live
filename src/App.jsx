@@ -401,9 +401,11 @@ export default function App() {
   const [params, setParams] = useState({ ...defaultParameters, ...(editableStored.params || {}) })
   const [month, setMonth] = useState(initialPeriod.month)
   const [year, setYear] = useState(initialPeriod.year)
-  const monthOptions = isReadOnly
-    ? [MIN_MONTH, MIN_MONTH + 1]
-    : MONTH_LABEL.map((_, index) => index).filter((index) => year !== MIN_YEAR || index >= MIN_MONTH)
+  const editableMonthOptions = MONTH_LABEL.map((_, index) => index)
+    .filter((index) => year !== MIN_YEAR || index >= MIN_MONTH)
+  const publicLastMonth = year === MIN_YEAR ? Math.max(MIN_MONTH + 1, month) : 11
+  const publicMonthOptions = editableMonthOptions.filter((index) => year !== MIN_YEAR || index <= publicLastMonth)
+  const monthOptions = isReadOnly ? publicMonthOptions : editableMonthOptions
   const showMonthControl = showPeriodControls
   const [manualParking, setManualParking] = useState(editableStored.manualParking || [])
   const [manualOffice93ByPeriod, setManualOffice93ByPeriod] = useState(editableStored.manualOffice93ByPeriod || {})
