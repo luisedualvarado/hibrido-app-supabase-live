@@ -222,6 +222,22 @@ function applyEmployeeFloatingOverrides(employeeList, floatingOverrides = EMPTY_
   })
 }
 
+function applyEmployeePlanOverrides(employeeList, planOverrides = EMPTY_OBJECT) {
+  return employeeList.map((employee) => {
+    const override = planOverrides[employee.id]
+    if (!override) return employee
+    return {
+      ...employee,
+      hybridApproved: Object.prototype.hasOwnProperty.call(override, 'hybridApproved')
+        ? Boolean(override.hybridApproved)
+        : employee.hybridApproved,
+      doubleHomeConsecutive: Object.prototype.hasOwnProperty.call(override, 'doubleHomeConsecutive')
+        ? Boolean(override.doubleHomeConsecutive)
+        : employee.doubleHomeConsecutive,
+    }
+  })
+}
+
 function nextPeriodMapWithEmployeeRemoved(map, employeeId) {
   return Object.fromEntries(
     Object.entries(map).map(([key, entries]) => {
@@ -419,6 +435,7 @@ export default function App() {
   const [manualDeskAssignmentsByPeriod, setManualDeskAssignmentsByPeriod] = useState(editableStored.manualDeskAssignmentsByPeriod || {})
   const [employeeSeatOverridesByPeriod, setEmployeeSeatOverridesByPeriod] = useState(editableStored.employeeSeatOverridesByPeriod || {})
   const [employeeFloatingOverridesByPeriod, setEmployeeFloatingOverridesByPeriod] = useState(editableStored.employeeFloatingOverridesByPeriod || {})
+  const [employeePlanOverridesByPeriod, setEmployeePlanOverridesByPeriod] = useState(editableStored.employeePlanOverridesByPeriod || {})
   const [savedWeeksByPeriod, setSavedWeeksByPeriod] = useState(editableStored.savedWeeksByPeriod || {})
   const [didHydrateStoredState, setDidHydrateStoredState] = useState(false)
   const [didHydratePreviewSnapshot, setDidHydratePreviewSnapshot] = useState(false)
@@ -442,12 +459,16 @@ export default function App() {
   const manualDeskAssignments = manualDeskAssignmentsByPeriod[periodKey] || EMPTY_ARRAY
   const employeeSeatOverrides = employeeSeatOverridesByPeriod[periodKey] || EMPTY_OBJECT
   const employeeFloatingOverrides = employeeFloatingOverridesByPeriod[periodKey] || EMPTY_OBJECT
+  const employeePlanOverrides = employeePlanOverridesByPeriod[periodKey] || EMPTY_OBJECT
   const employeesForPeriod = useMemo(
     () => applyEmployeeFloatingOverrides(
-      applyEmployeeSeatOverrides(employees, employeeSeatOverrides),
+      applyEmployeePlanOverrides(
+        applyEmployeeSeatOverrides(employees, employeeSeatOverrides),
+        employeePlanOverrides
+      ),
       employeeFloatingOverrides
     ),
-    [employees, employeeSeatOverrides, employeeFloatingOverrides]
+    [employees, employeeSeatOverrides, employeePlanOverrides, employeeFloatingOverrides]
   )
   const periodLabel = `${MONTH_LABEL[month]} ${year}`
   const savedWeeks = savedWeeksByPeriod[periodKey] || EMPTY_ARRAY
@@ -736,16 +757,28 @@ export default function App() {
   const saveEmployeeForPeriod = useCallback((emp) => {
     const nextSeat = String(emp.baseSeat || '').trim()
     const nextFloating = Boolean(emp.isFloating)
+    const nextHybridApproved = Boolean(emp.hybridApproved)
+    const nextDoubleHome = Boolean(emp.doubleHomeConsecutive)
 
     if (!emp.id) {
       const id = makeEmployeeId(emp.name)
-      setEmployees((prev) => [...prev, { ...emp, id, baseSeat: nextSeat, isFloating: nextFloating, nameOverride: true }])
+      setEmployees((prev) => [...prev, {
+        ...emp,
+        id,
+        baseSeat: nextSeat,
+        isFloating: nextFloating,
+        hybridApproved: nextHybridApproved,
+        doubleHomeConsecutive: nextDoubleHome,
+        nameOverride: true,
+      }])
       return
     }
 
     const original = employees.find((employee) => employee.id === emp.id)
     const baseSeat = original?.baseSeat || ''
     const baseFloating = Boolean(original?.isFloating)
+    const baseHybridApproved = Boolean(original?.hybridApproved)
+    const baseDoubleHome = Boolean(original?.doubleHomeConsecutive)
 
     setEmployees((prev) => prev.map((employee) => {
       if (employee.id !== emp.id) return employee
@@ -753,6 +786,8 @@ export default function App() {
         ...emp,
         baseSeat,
         isFloating: baseFloating,
+        hybridApproved: baseHybridApproved,
+        doubleHomeConsecutive: baseDoubleHome,
         nameOverride: emp.name !== employee.name ? true : employee.nameOverride,
       }
     }))
@@ -769,6 +804,16 @@ export default function App() {
       [periodKey]: {
         ...(prev[periodKey] || {}),
         [emp.id]: nextFloating,
+      },
+    }))
+    setEmployeePlanOverridesByPeriod((prev) => ({
+      ...prev,
+      [periodKey]: {
+        ...(prev[periodKey] || {}),
+        [emp.id]: {
+          hybridApproved: nextHybridApproved,
+          doubleHomeConsecutive: nextDoubleHome,
+        },
       },
     }))
   }, [employees, periodKey])
@@ -789,6 +834,7 @@ export default function App() {
     ))
     setEmployeeSeatOverridesByPeriod((prev) => nextPeriodMapWithEmployeeRemoved(prev, employeeId))
     setEmployeeFloatingOverridesByPeriod((prev) => nextPeriodMapWithEmployeeRemoved(prev, employeeId))
+    setEmployeePlanOverridesByPeriod((prev) => nextPeriodMapWithEmployeeRemoved(prev, employeeId))
   }, [])
 
   const clearOverrides = () => {
@@ -817,8 +863,9 @@ export default function App() {
     manualDeskAssignmentsByPeriod,
     employeeSeatOverridesByPeriod,
     employeeFloatingOverridesByPeriod,
+    employeePlanOverridesByPeriod,
     savedWeeksByPeriod,
-  }), [employees, holidays, absences, manualOverrides, params, month, year, manualParking, manualOffice93ByPeriod, manualLockersByPeriod, manualDeskAssignmentsByPeriod, employeeSeatOverridesByPeriod, employeeFloatingOverridesByPeriod, savedWeeksByPeriod])
+  }), [employees, holidays, absences, manualOverrides, params, month, year, manualParking, manualOffice93ByPeriod, manualLockersByPeriod, manualDeskAssignmentsByPeriod, employeeSeatOverridesByPeriod, employeeFloatingOverridesByPeriod, employeePlanOverridesByPeriod, savedWeeksByPeriod])
   const currentSnapshotJson = useMemo(() => JSON.stringify(currentSnapshot), [currentSnapshot])
   const buildSnapshot = useCallback(() => currentSnapshot, [currentSnapshot])
 
@@ -841,6 +888,7 @@ export default function App() {
     if (snap.manualDeskAssignmentsByPeriod) setManualDeskAssignmentsByPeriod(snap.manualDeskAssignmentsByPeriod)
     setEmployeeSeatOverridesByPeriod(snap.employeeSeatOverridesByPeriod || {})
     setEmployeeFloatingOverridesByPeriod(snap.employeeFloatingOverridesByPeriod || {})
+    setEmployeePlanOverridesByPeriod(snap.employeePlanOverridesByPeriod || {})
     if (snap.savedWeeksByPeriod) setSavedWeeksByPeriod(snap.savedWeeksByPeriod)
     else if (snap.manualOffice93) {
       const importedKey = periodKeyFor(nextPeriod.year, nextPeriod.month)

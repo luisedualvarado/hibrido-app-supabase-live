@@ -170,9 +170,9 @@ export default function People({ employees, setEmployees, onSaveEmployee, onDele
   }
 
   const toggle = (id, field) => {
-    if (field === 'isFloating' && onSaveEmployee) {
+    if (['hybridApproved', 'isFloating', 'doubleHomeConsecutive'].includes(field) && onSaveEmployee) {
       const employee = employees.find((item) => item.id === id)
-      if (employee) onSaveEmployee({ ...employee, isFloating: !employee.isFloating })
+      if (employee) onSaveEmployee({ ...employee, [field]: !employee[field] })
       return
     }
 
@@ -292,9 +292,9 @@ export default function People({ employees, setEmployees, onSaveEmployee, onDele
               <th><button className="th-btn" onClick={() => toggleSort('location')}>Ubicacion{sortMark('location')}</button></th>
               <th>Condicion</th>
               <th><button className="th-btn" onClick={() => toggleSort('active')}>Activo{sortMark('active')}</button></th>
-              <th><button className="th-btn" onClick={() => toggleSort('hybrid')}>Hibrido{sortMark('hybrid')}</button></th>
+              <th><button className="th-btn" onClick={() => toggleSort('hybrid')}>Hibrido {periodLabel}{sortMark('hybrid')}</button></th>
               <th><button className="th-btn" onClick={() => toggleSort('floating')}>Flotante {periodLabel}{sortMark('floating')}</button></th>
-              <th><button className="th-btn" onClick={() => toggleSort('doubleHome')}>2 TC{sortMark('doubleHome')}</button></th>
+              <th><button className="th-btn" onClick={() => toggleSort('doubleHome')}>2 TC {periodLabel}{sortMark('doubleHome')}</button></th>
               <th><button className="th-btn" onClick={() => toggleSort('avoidConsecutive')}>No seguido{sortMark('avoidConsecutive')}</button></th>
               <th><button className="th-btn" onClick={() => toggleSort('car')}>Carro{sortMark('car')}</button></th>
               <th><button className="th-btn" onClick={() => toggleSort('parking')}>Parqueadero{sortMark('parking')}</button></th>
@@ -423,10 +423,10 @@ function EmployeeModal({ emp, onClose, onSave, periodLabel }) {
           </div>
           <div className="row" style={{ gap: 18, marginTop: 6 }}>
             <Check label="Activo" v={f.isActive} on={() => up('isActive', !f.isActive)} />
-            <Check label="Hibrido aprobado" v={f.hybridApproved} on={() => up('hybridApproved', !f.hybridApproved)} />
+            <Check label={`Hibrido aprobado ${periodLabel}`} v={f.hybridApproved} on={() => up('hybridApproved', !f.hybridApproved)} />
             <Check label={`Flotante ${periodLabel}`} v={f.isFloating} on={() => up('isFloating', !f.isFloating)} />
             <Check label="Condicion habilitada" v={restrictionEnabled(f)} on={() => up('restrictionEnabled', !restrictionEnabled(f))} />
-            <Check label="2 dias TC por semana" v={!!f.doubleHomeConsecutive} on={() => up('doubleHomeConsecutive', !f.doubleHomeConsecutive)} />
+            <Check label={`2 dias TC ${periodLabel} (desmarcado = 1 TC)`} v={!!f.doubleHomeConsecutive} on={() => up('doubleHomeConsecutive', !f.doubleHomeConsecutive)} />
             <Check label="Evitar TC seguido" v={!!f.avoidConsecutiveHomeDays} on={() => up('avoidConsecutiveHomeDays', !f.avoidConsecutiveHomeDays)} />
             <Check label="Tiene carro" v={f.hasCar} on={() => up('hasCar', !f.hasCar)} />
             <Check label="Elegible parqueadero" v={f.parkingEligible} on={() => up('parkingEligible', !f.parkingEligible)} />
