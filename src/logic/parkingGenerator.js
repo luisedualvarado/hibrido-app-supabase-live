@@ -4,6 +4,7 @@ import { PHYSICAL_SEATS_BY_LOCATION } from './deskLayouts.js'
 import { hasHardRestriction, isDateAllowedForEmployee, isFloatingSeatEligible, isRotationEligible, weeklyHomeTarget } from './rotationPolicy.js'
 
 const MAX_OPERATIONAL_HOME_DAYS = 2
+const MAX_EXCEPTIONAL_HOME_DAYS = 3
 
 const BLOCKED_FLOATING_SEATS_BY_LOCATION = {
   WEWORK: new Set(),
@@ -258,7 +259,14 @@ function canUseOperationalHome(employee, iso, cells, week, allowOverMax = false)
   const cell = cells[`${employee.id}__${iso}`]
   if (!cell || cell.status !== 'OFFICE' || cell.source === 'MANUAL') return false
   if (!isRotationEligible(employee)) return false
-  if (!allowOverMax && week && countHomeDays(cells, employee.id, week.workdays) >= MAX_OPERATIONAL_HOME_DAYS) return false
+  if (week) {
+    const weeklyHomeDays = countHomeDays(cells, employee.id, week.workdays)
+    if (!allowOverMax && weeklyHomeDays >= MAX_OPERATIONAL_HOME_DAYS) return false
+    if (allowOverMax) {
+      if (weeklyHomeTarget(employee) < MAX_OPERATIONAL_HOME_DAYS) return false
+      if (weeklyHomeDays >= MAX_EXCEPTIONAL_HOME_DAYS) return false
+    }
+  }
   if (hasHardRestriction(employee) && !isDateAllowedForEmployee(employee, iso)) return false
   if (employee.avoidConsecutiveHomeDays && week && hasAdjacentHome(cells, employee.id, iso, week.workdays)) return false
   return true

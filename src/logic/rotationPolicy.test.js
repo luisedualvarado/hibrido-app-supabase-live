@@ -470,7 +470,7 @@ test('floating seat rule rebalances TC before exceeding weekly cap', () => {
   const date = '2026-06-03'
   const previousOne = '2026-06-01'
   const previousTwo = '2026-06-02'
-  const cappedRegular = employee('capped-regular', { name: 'Capped Regular', isFloating: false, baseSeat: '1' })
+  const cappedRegular = employee('capped-regular', { name: 'Capped Regular', isFloating: false, baseSeat: '1', doubleHomeConsecutive: true })
   const alternativeRegular = employee('alternative-regular', { name: 'Alternative Regular', isFloating: false, baseSeat: '2' })
   const floaterOne = employee('floater-one', { name: 'Floater One', isFloating: true })
   const people = [cappedRegular, alternativeRegular, floaterOne]
@@ -505,7 +505,7 @@ test('floating seat rule uses exceptional TC instead of leaving a floater withou
   const date = '2026-06-03'
   const previousOne = '2026-06-01'
   const previousTwo = '2026-06-02'
-  const cappedRegular = employee('capped-regular', { name: 'Capped Regular', isFloating: false, baseSeat: '1' })
+  const cappedRegular = employee('capped-regular', { name: 'Capped Regular', isFloating: false, baseSeat: '1', doubleHomeConsecutive: true })
   const floater = employee('floater', { name: 'Floater', isFloating: true })
   const people = [cappedRegular, floater]
   const days = [previousOne, previousTwo, date]
@@ -531,6 +531,41 @@ test('floating seat rule uses exceptional TC instead of leaving a floater withou
   assert.equal(resolved.cells[`${cappedRegular.id}__${date}`].source, 'CAPACITY')
   assert.equal(result[date].unseated.length, 0)
   assert.ok(resolved.cells[`${cappedRegular.id}__${date}`].alerts.some((alert) => /excepcional/i.test(alert)))
+})
+test('floating exceptional TC never gives a third TC to one-day employees', () => {
+  const date = '2026-06-03'
+  const previousOne = '2026-06-01'
+  const previousTwo = '2026-06-02'
+  const oneDayCapped = employee('one-day-capped', { name: 'A One Day Capped', isFloating: false, baseSeat: '1' })
+  const twoDayCapped = employee('two-day-capped', { name: 'B Two Day Capped', isFloating: false, baseSeat: '2', doubleHomeConsecutive: true })
+  const floater = employee('floater', { name: 'Floater', isFloating: true })
+  const people = [oneDayCapped, twoDayCapped, floater]
+  const days = [previousOne, previousTwo, date]
+  const schedule = {
+    days,
+    weeks: [{ weekId: '2026-W23', workdays: days }],
+    alerts: [],
+    cells: Object.fromEntries(people.flatMap((person) => days.map((iso) => [`${person.id}__${iso}`, {
+      employeeId: person.id,
+      date: iso,
+      status: 'OFFICE',
+      source: 'TEST',
+      alerts: [],
+    }]))),
+  }
+  for (const person of [oneDayCapped, twoDayCapped]) {
+    schedule.cells[`${person.id}__${previousOne}`].status = 'HOME'
+    schedule.cells[`${person.id}__${previousTwo}`].status = 'HOME'
+  }
+
+  const resolved = resolveFloatingSeatShortages(schedule, people, [date], { ...params, seatsWeWork: 2, seats93: 0 })
+  const { result } = assignFloatingSeats(resolved, people, [date], { ...params, seatsWeWork: 2, seats93: 0 })
+
+  assert.equal(resolved.cells[`${oneDayCapped.id}__${date}`].status, 'OFFICE')
+  assert.equal(resolved.cells[`${twoDayCapped.id}__${date}`].status, 'HOME')
+  assert.equal(days.filter((iso) => resolved.cells[`${oneDayCapped.id}__${iso}`].status === 'HOME').length, 2)
+  assert.equal(days.filter((iso) => resolved.cells[`${twoDayCapped.id}__${iso}`].status === 'HOME').length, 3)
+  assert.equal(result[date].unseated.length, 0)
 })
 test('daily summary counts floating seats by actual assigned location', () => {
   const date = '2026-06-01'
