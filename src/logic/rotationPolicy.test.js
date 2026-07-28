@@ -105,6 +105,29 @@ test('capacity balancing uses automatic capacity TC without sending non-approved
   assert.ok(balanced.days.some((date) => balanced.cells[`approved__${date}`]?.source === 'CAPACITY'))
   assert.ok(balanced.alerts.some((alert) => alert.rule === 'WEWORK_CAPACITY_HOME_ASSIGNED'))
 })
+test('manual office adjustment is accepted and capacity is rebalanced', () => {
+  const manualPerson = employee('manual-person', { name: 'Manual Person' })
+  const regularOne = employee('regular-one', { name: 'Regular One' })
+  const regularTwo = employee('regular-two', { name: 'Regular Two' })
+  const people = [manualPerson, regularOne, regularTwo]
+  const schedule = generate(people, { ...params, seatsWeWork: 2 })
+  const week = schedule.weeks[0]
+  const date = homeDays(schedule, manualPerson.id, week.workdays)[0]
+
+  const withManualOffice = applyManualOverrides(schedule, [{
+    employeeId: manualPerson.id,
+    date,
+    status: 'OFFICE',
+    reason: 'Necesita asistir presencial',
+  }], people, { ...params, seatsWeWork: 2 })
+  const balanced = enforceNoOfficeOvercapacity(withManualOffice, people, [], { ...params, seatsWeWork: 2 }, 'manual-office')
+
+  assert.equal(balanced.cells[`${manualPerson.id}__${date}`].status, 'OFFICE')
+  assert.equal(balanced.cells[`${manualPerson.id}__${date}`].source, 'MANUAL')
+  assert.equal(people.filter((person) => balanced.cells[`${person.id}__${date}`].status === 'OFFICE').length, 2)
+  assert.ok(people.some((person) => person.id !== manualPerson.id && balanced.cells[`${person.id}__${date}`].source === 'CAPACITY'))
+})
+
 test('manual TC cannot break approval, restriction or weekly target', () => {
   const fixed = employee('fixed', { restrictionType: 'FIXED_DAY', fixedDay: 'WEDNESDAY' })
   const unrestricted = employee('unrestricted')

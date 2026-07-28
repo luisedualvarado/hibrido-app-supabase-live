@@ -337,9 +337,6 @@ export function applyManualOverrides(schedule, manualOverrides, employees = [], 
   const cells = { ...schedule.cells }
   const employeesById = Object.fromEntries(employees.map((employee) => [employee.id, employee]))
   const alerts = [...(schedule.alerts || [])]
-  const officeCount = (date, location) => employees.filter((employee) =>
-    employee.baseLocation === location && cells[`${employee.id}__${date}`]?.status === 'OFFICE'
-  ).length
   for (const ov of manualOverrides) {
     const key = `${ov.employeeId}__${ov.date}`
     if (!cells[key]) continue
@@ -364,23 +361,6 @@ export function applyManualOverrides(schedule, manualOverrides, employees = [], 
       }
       if (message) {
         alerts.push({ id: `${rule}-${alerts.length}`, severity: 'CRITICAL', date: ov.date, employeeId: ov.employeeId, message, rule })
-        continue
-      }
-    }
-    if (ov.status === 'OFFICE' && employee && ['WEWORK', 'OFICINA_93'].includes(employee.baseLocation)) {
-      const seats = Number(employee.baseLocation === 'OFICINA_93' ? params.seats93 : params.seatsWeWork) || 0
-      const currentStatus = cells[key].status
-      const currentOfficeCount = officeCount(ov.date, employee.baseLocation)
-      const projectedOfficeCount = currentStatus === 'OFFICE' ? currentOfficeCount : currentOfficeCount + 1
-      if (seats > 0 && projectedOfficeCount > seats) {
-        alerts.push({
-          id: `manual-capacity-${alerts.length}`,
-          severity: 'WARNING',
-          date: ov.date,
-          employeeId: ov.employeeId,
-          message: `${employee.name}: ajuste manual a oficina no aplicado porque genera sobrecupo.`,
-          rule: 'MANUAL_OFFICE_OVER_CAPACITY_SKIPPED',
-        })
         continue
       }
     }
