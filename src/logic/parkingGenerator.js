@@ -245,6 +245,15 @@ function countOperationalHomeDays(cells, employeeId) {
     cell?.employeeId === employeeId && cell.status === 'HOME' && cell.source === 'CAPACITY'
   ).length
 }
+function buildOperationalHomeCounts(cells) {
+  const counts = new Map()
+  for (const cell of Object.values(cells)) {
+    if (cell?.employeeId && cell.status === 'HOME' && cell.source === 'CAPACITY') {
+      counts.set(cell.employeeId, (counts.get(cell.employeeId) || 0) + 1)
+    }
+  }
+  return counts
+}
 function hasAdjacentHome(cells, employeeId, iso, workdays) {
   const index = workdays.indexOf(iso)
   const previous = index > 0 ? workdays[index - 1] : null
@@ -287,7 +296,7 @@ function setOperationalHome(cells, employee, iso, locationLabel, exceptional = f
   }
 }
 
-function moveExistingHomeToAlternative(cells, employees, employee, targetIso, week) {
+function moveExistingHomeToAlternative(cells, employees, employee, targetIso, week, operationalHomeCountById = null) {
   if (!week) return false
   const previousHomeDays = week.workdays.filter((iso) => iso !== targetIso && cells[`${employee.id}__${iso}`]?.status === 'HOME')
   const alternatives = employees
@@ -297,7 +306,9 @@ function moveExistingHomeToAlternative(cells, employees, employee, targetIso, we
     .sort((left, right) => {
       const targetDiff = weeklyHomeTarget(left) - weeklyHomeTarget(right)
       if (targetDiff !== 0) return targetDiff
-      const usageDiff = countOperationalHomeDays(cells, left.id) - countOperationalHomeDays(cells, right.id)
+      const leftOperationalUsed = operationalHomeCountById?.get(left.id) ?? countOperationalHomeDays(cells, left.id)
+      const rightOperationalUsed = operationalHomeCountById?.get(right.id) ?? countOperationalHomeDays(cells, right.id)
+      const usageDiff = leftOperationalUsed - rightOperationalUsed
       if (usageDiff !== 0) return usageDiff
       return left.name.localeCompare(right.name, 'es')
     })
@@ -323,7 +334,7 @@ function moveExistingHomeToAlternative(cells, employees, employee, targetIso, we
         source: 'CAPACITY',
         alerts: [...(cells[altKey].alerts || []), 'TC operativo reasignado para garantizar puesto flotante'],
       }
-      return true
+      return oldIso
     }
   }
   return false
@@ -333,29 +344,99 @@ export function resolveFloatingSeatShortages(schedule, employees, days, params, 
   const alerts = [...(schedule.alerts || [])]
   const locationLabels = { WEWORK: 'WeWork', OFICINA_93: 'Oficina 93' }
   const blockedSeats = BLOCKED_FLOATING_SEATS_BY_LOCATION
-  const maxAttempts = Math.max(1, days.length * employees.length)
+  const currentSchedule = () => ({ ...schedule, cells, alerts })
+  const { result: initialFloatingResult } = assignFloatingSeats(currentSchedule(), employees, days, params, manualDeskAssignments)
+  const initialShortageDays = days.filter((iso) => ['WEWORK', 'OFICINA_93']
+    .some((location) => (initialFloatingResult[iso]?.byLocation?.[location]?.unseated?.length || 0) > 0))
+  const initialShortageCount = initialShortageDays.reduce((total, iso) => total + ['WEWORK', 'OFICINA_93']
+    .reduce((dayTotal, location) => dayTotal + (initialFloatingResult[iso]?.byLocation?.[location]?.unseated?.length || 0), 0), 0)
+  if (initialShortageCount === 0) return currentSchedule()
 
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const currentSchedule = { ...schedule, cells, alerts }
-    const { result } = assignFloatingSeats(currentSchedule, employees, days, params, manualDeskAssignments)
-    const shortage = days.flatMap((iso) => ['WEWORK', 'OFICINA_93'].map((location) => ({
+  const maxRepairs = Math.max(1, initialShortageCount + initialShortageDays.length * 2)
+  const pendingDays = [...initialShortageDays]
+  const pendingDaySet = new Set(pendingDays)
+  const seenShortageStates = new Set()
+  const repairCountsByLocationDay = new Map()
+
+  const enqueueDay = (iso) => {
+    if (!iso || pendingDaySet.has(iso)) return
+    pendingDays.push(iso)
+    pendingDaySet.add(iso)
+  }
+  const findFirstShortage = (result, checkDays) => checkDays
+    .flatMap((iso) => ['WEWORK', 'OFICINA_93'].map((location) => ({
       iso,
       location,
       count: result[iso]?.byLocation?.[location]?.unseated?.length || 0,
-    }))).find((entry) => entry.count > 0)
+    })))
+    .find((entry) => entry.count > 0)
 
-    if (!shortage) return currentSchedule
+  let repairs = 0
+  while (repairs < maxRepairs) {
+    if (pendingDays.length === 0) {
+      const { result } = assignFloatingSeats(currentSchedule(), employees, days, params, manualDeskAssignments)
+      const remainingShortage = findFirstShortage(result, days)
+      if (!remainingShortage) return currentSchedule()
+      enqueueDay(remainingShortage.iso)
+    }
 
+    const isoToCheck = pendingDays.shift()
+    pendingDaySet.delete(isoToCheck)
+    const { result } = assignFloatingSeats(currentSchedule(), employees, [isoToCheck], params, manualDeskAssignments)
+    const shortage = findFirstShortage(result, [isoToCheck])
+    if (!shortage) continue
+
+    const shortageLocationState = result[shortage.iso]?.byLocation?.[shortage.location] || {}
+    const unseatedSignature = (shortageLocationState.unseated || []).join(',')
+    const occupiedSignature = (shortageLocationState.occupiedAssignments || [])
+      .map((assignment) => `${assignment.empId}:${assignment.seat}`)
+      .sort()
+      .join(',')
+    const shortageStateKey = `${shortage.iso}|${shortage.location}|${unseatedSignature}|${occupiedSignature}`
+    if (seenShortageStates.has(shortageStateKey)) {
+      alerts.push({
+        id: `FLOATER_SEAT_CAPACITY_UNRESOLVED-${alerts.length}`,
+        severity: 'CRITICAL',
+        date: shortage.iso,
+        message: `${shortage.iso}: no se encontro un reacomodo adicional que libere puesto flotante en ${locationLabels[shortage.location]}.`,
+        rule: 'FLOATER_SEAT_CAPACITY_UNRESOLVED',
+        location: shortage.location,
+      })
+      return currentSchedule()
+    }
+    seenShortageStates.add(shortageStateKey)
+
+    repairs += 1
     const week = weekForDate(schedule.weeks, shortage.iso)
+    const occupiedRegularIds = new Set(
+      (shortageLocationState.occupiedAssignments || []).map((assignment) => assignment.empId)
+    )
+    const repairCountKey = `${shortage.iso}|${shortage.location}`
+    const nextRepairCount = (repairCountsByLocationDay.get(repairCountKey) || 0) + 1
+    repairCountsByLocationDay.set(repairCountKey, nextRepairCount)
+    const maxRepairsForLocationDay = Math.max(1, occupiedRegularIds.size + shortage.count)
+    if (nextRepairCount > maxRepairsForLocationDay) {
+      alerts.push({
+        id: `FLOATER_SEAT_CAPACITY_UNRESOLVED-${alerts.length}`,
+        severity: 'CRITICAL',
+        date: shortage.iso,
+        message: `${shortage.iso}: se agotaron los reacomodos posibles para liberar puesto flotante en ${locationLabels[shortage.location]}.`,
+        rule: 'FLOATER_SEAT_CAPACITY_UNRESOLVED',
+        location: shortage.location,
+      })
+      return currentSchedule()
+    }
+    const operationalHomeCountById = buildOperationalHomeCounts(cells)
     const buildCandidates = (allowOverMax = false) => employees
+      .filter((employee) => occupiedRegularIds.has(employee.id))
       .filter((employee) => !employee.isFloating && employee.baseLocation === shortage.location)
       .filter((employee) => canUseOperationalHome(employee, shortage.iso, cells, week, allowOverMax))
       .sort((left, right) => {
         const leftTarget = weeklyHomeTarget(left)
         const rightTarget = weeklyHomeTarget(right)
         if (leftTarget !== rightTarget) return leftTarget - rightTarget
-        const leftOperationalUsed = countOperationalHomeDays(cells, left.id)
-        const rightOperationalUsed = countOperationalHomeDays(cells, right.id)
+        const leftOperationalUsed = operationalHomeCountById.get(left.id) || 0
+        const rightOperationalUsed = operationalHomeCountById.get(right.id) || 0
         if (leftOperationalUsed !== rightOperationalUsed) return leftOperationalUsed - rightOperationalUsed
         const leftBlocked = blockedSeats[shortage.location]?.has(left.baseSeat) ? 1 : 0
         const rightBlocked = blockedSeats[shortage.location]?.has(right.baseSeat) ? 1 : 0
@@ -366,15 +447,6 @@ export function resolveFloatingSeatShortages(schedule, employees, days, params, 
     const normalCandidates = buildCandidates(false)
     let exceptional = false
     let candidate = normalCandidates[0]
-    if (!candidate) {
-      for (const overMaxCandidate of buildCandidates(true)) {
-        if (moveExistingHomeToAlternative(cells, employees, overMaxCandidate, shortage.iso, week)) {
-          candidate = overMaxCandidate
-          exceptional = true
-          break
-        }
-      }
-    }
     if (!candidate) {
       candidate = buildCandidates(true)[0]
       exceptional = Boolean(candidate)
@@ -388,7 +460,7 @@ export function resolveFloatingSeatShortages(schedule, employees, days, params, 
         rule: 'FLOATER_SEAT_CAPACITY_UNRESOLVED',
         location: shortage.location,
       })
-      return currentSchedule
+      return currentSchedule()
     }
 
     setOperationalHome(cells, candidate, shortage.iso, locationLabels[shortage.location], exceptional)
@@ -401,6 +473,7 @@ export function resolveFloatingSeatShortages(schedule, employees, days, params, 
       rule: 'FLOATER_SEAT_CAPACITY_HOME_ASSIGNED',
       location: shortage.location,
     })
+    enqueueDay(shortage.iso)
   }
 
   alerts.push({

@@ -466,7 +466,7 @@ test('floating capacity TC does not exceed two weekly TC days', () => {
   assert.equal(resolved.cells[`${availableRegular.id}__${date}`].source, 'CAPACITY')
   assert.equal(days.filter((iso) => resolved.cells[`${cappedRegular.id}__${iso}`].status === 'HOME').length, 2)
 })
-test('floating seat rule rebalances TC before exceeding weekly cap', () => {
+test('floating seat rule allows third TC only for two-day employees', () => {
   const date = '2026-06-03'
   const previousOne = '2026-06-01'
   const previousTwo = '2026-06-02'
@@ -497,8 +497,8 @@ test('floating seat rule rebalances TC before exceeding weekly cap', () => {
   assert.equal(resolved.cells[`${cappedRegular.id}__${date}`].status, 'HOME')
   assert.equal(resolved.cells[`${cappedRegular.id}__${date}`].source, 'CAPACITY')
   assert.equal(result[date].unseated.length, 0)
-  assert.equal(days.filter((iso) => resolved.cells[`${cappedRegular.id}__${iso}`].status === 'HOME').length, 2)
-  assert.ok(days.some((iso) => resolved.cells[`${alternativeRegular.id}__${iso}`].status === 'HOME'))
+  assert.equal(days.filter((iso) => resolved.cells[cappedRegular.id + '__' + iso].status === 'HOME').length, 3)
+  assert.equal(resolved.cells[alternativeRegular.id + '__' + previousOne].status, 'OFFICE')
   assert.ok(resolved.cells[`${cappedRegular.id}__${date}`].alerts.some((alert) => /excepcional/i.test(alert)))
 })
 test('floating seat rule uses exceptional TC instead of leaving a floater without seat', () => {
