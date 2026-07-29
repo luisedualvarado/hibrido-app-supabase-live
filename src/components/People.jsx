@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useDeferredValue, useMemo, useState } from 'react'
 
 const byName = (a, b) => a.name.localeCompare(b.name, 'es')
 
@@ -71,7 +71,9 @@ export default function People({ employees, setEmployees, onSaveEmployee, onDele
     parking: 'ALL',
   })
 
-  const disciplines = Array.from(new Set(employees.map((e) => e.discipline))).sort()
+  const deferredSearch = useDeferredValue(search)
+  const deferredColumnFilters = useDeferredValue(columnFilters)
+  const disciplines = useMemo(() => Array.from(new Set(employees.map((e) => e.discipline))).sort(), [employees])
   const totals = {
     total: employees.length,
     active: employees.filter((e) => e.isActive).length,
@@ -112,7 +114,7 @@ export default function People({ employees, setEmployees, onSaveEmployee, onDele
 
   const filtered = employees.filter((e) => {
     const text = `${e.name} ${e.email} ${e.role} ${e.discipline}`.toLowerCase()
-    if (search && !text.includes(search.toLowerCase())) return false
+    if (deferredSearch && !text.includes(deferredSearch.toLowerCase())) return false
     if (location !== 'ALL' && e.baseLocation !== location) return false
     if (discipline !== 'ALL' && e.discipline !== discipline) return false
     if (status === 'ACTIVE' && !e.isActive) return false
@@ -124,17 +126,17 @@ export default function People({ employees, setEmployees, onSaveEmployee, onDele
     if (flag === 'AVOID_CONSECUTIVE' && !e.avoidConsecutiveHomeDays) return false
     if (flag === 'CAR' && !e.hasCar) return false
     if (flag === 'PARKING' && !e.parkingEligible) return false
-    if (columnFilters.name && !e.name.toLowerCase().includes(columnFilters.name.toLowerCase())) return false
-    if (columnFilters.baseSeat && !String(e.baseSeat || '').toLowerCase().includes(columnFilters.baseSeat.toLowerCase())) return false
-    if (columnFilters.discipline !== 'ALL' && e.discipline !== columnFilters.discipline) return false
-    if (columnFilters.location !== 'ALL' && e.baseLocation !== columnFilters.location) return false
-    if (!matchesYesNo(e.isActive, columnFilters.active)) return false
-    if (!matchesYesNo(e.hybridApproved, columnFilters.hybrid)) return false
-    if (!matchesYesNo(e.isFloating, columnFilters.floating)) return false
-    if (!matchesYesNo(e.doubleHomeConsecutive, columnFilters.doubleHome)) return false
-    if (!matchesYesNo(e.avoidConsecutiveHomeDays, columnFilters.avoidConsecutive)) return false
-    if (!matchesYesNo(e.hasCar, columnFilters.car)) return false
-    if (!matchesYesNo(e.parkingEligible, columnFilters.parking)) return false
+    if (deferredColumnFilters.name && !e.name.toLowerCase().includes(deferredColumnFilters.name.toLowerCase())) return false
+    if (deferredColumnFilters.baseSeat && !String(e.baseSeat || '').toLowerCase().includes(deferredColumnFilters.baseSeat.toLowerCase())) return false
+    if (deferredColumnFilters.discipline !== 'ALL' && e.discipline !== deferredColumnFilters.discipline) return false
+    if (deferredColumnFilters.location !== 'ALL' && e.baseLocation !== deferredColumnFilters.location) return false
+    if (!matchesYesNo(e.isActive, deferredColumnFilters.active)) return false
+    if (!matchesYesNo(e.hybridApproved, deferredColumnFilters.hybrid)) return false
+    if (!matchesYesNo(e.isFloating, deferredColumnFilters.floating)) return false
+    if (!matchesYesNo(e.doubleHomeConsecutive, deferredColumnFilters.doubleHome)) return false
+    if (!matchesYesNo(e.avoidConsecutiveHomeDays, deferredColumnFilters.avoidConsecutive)) return false
+    if (!matchesYesNo(e.hasCar, deferredColumnFilters.car)) return false
+    if (!matchesYesNo(e.parkingEligible, deferredColumnFilters.parking)) return false
     return true
   }).sort((a, b) => {
     const aValue = sortValue(a, sort.key)

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useDeferredValue, useMemo, useState } from 'react'
 import { isWeekend, WEEKDAY_LABEL, weekdayKey, dayOfMonth } from '../logic/dateUtils.js'
 import { buildFloatingSeatEmployees } from '../logic/rotationPolicy.js'
 
@@ -142,6 +142,7 @@ function deskCellClassName(cell) {
 export default function FloatingSeats({ schedule, employees, floatingResult, month, year }) {
   const [search, setSearch] = useState('')
   const [loc, setLoc] = useState('ALL')
+  const deferredSearch = useDeferredValue(search)
   const deskPreset = month === 5 && year === 2026 ? JUNE_2026_DESK_PRESET : null
 
   const filtered = useMemo(() => {
@@ -151,10 +152,10 @@ export default function FloatingSeats({ schedule, employees, floatingResult, mon
     const baseEmployees = buildFloatingSeatEmployees(employees, presetEmployeeIds)
 
     return baseEmployees
-      .filter((employee) => !search || employee.name.toLowerCase().includes(search.toLowerCase()))
+      .filter((employee) => !deferredSearch || employee.name.toLowerCase().includes(deferredSearch.toLowerCase()))
       .filter((employee) => loc === 'ALL' || employee.baseLocation === loc)
       .sort(byName)
-  }, [deskPreset, employees, loc, search])
+  }, [deskPreset, employees, loc, deferredSearch])
 
   if (!schedule?.days?.length) return <div className="empty">No hay dias disponibles para mostrar puestos.</div>
 

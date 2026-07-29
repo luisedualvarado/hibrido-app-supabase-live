@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useDeferredValue } from 'react'
 import { isWeekend, weekdayKey, WEEKDAY_LABEL, dayOfMonth, prettyDate } from '../logic/dateUtils.js'
 
 const STATUS_ABBR = { HOME: 'TC', VACATION: 'VAC', HOLIDAY: 'FES', ABSENCE: 'AUS', NOT_APPLICABLE: 'NA' }
@@ -58,13 +58,15 @@ export default function MonthlySchedule({
   const [onlyCar, setOnlyCar] = useState(false)
   const [onlyAlert, setOnlyAlert] = useState(false)
   const [editing, setEditing] = useState(null) // {employee, iso, cell}
+  const deferredSearch = useDeferredValue(search)
+  const deferredSeatSearch = useDeferredValue(seatSearch)
 
   const disciplines = useMemo(
     () => Array.from(new Set(employees.map((e) => e.discipline))).sort(), [employees])
 
   const filtered = useMemo(() => employees.filter((e) => {
-    if (search && !e.name.toLowerCase().includes(search.toLowerCase())) return false
-    if (seatSearch && !String(e.baseSeat || '').toLowerCase().includes(seatSearch.toLowerCase())) return false
+    if (deferredSearch && !e.name.toLowerCase().includes(deferredSearch.toLowerCase())) return false
+    if (deferredSeatSearch && !String(e.baseSeat || '').toLowerCase().includes(deferredSeatSearch.toLowerCase())) return false
     if (loc !== 'ALL' && e.baseLocation !== loc) return false
     if (disc !== 'ALL' && e.discipline !== disc) return false
     if (onlyFloating && !e.isFloating) return false
@@ -77,11 +79,11 @@ export default function MonthlySchedule({
       if (!has) return false
     }
     return true
-  }).sort(byName), [employees, search, seatSearch, loc, disc, onlyFloating, onlyCar, onlyAlert, schedule])
+  }).sort(byName), [employees, deferredSearch, deferredSeatSearch, loc, disc, onlyFloating, onlyCar, onlyAlert, schedule])
 
-  const overrideFor = (empId, iso) =>
-    manualOverrides.find((o) => o.employeeId === empId && o.date === iso)
-  const savedWeeksMap = new Map(savedWeeks.map((entry) => [entry.weekId, entry]))
+  const overrideMap = useMemo(() => new Map(manualOverrides.map((override) => [override.employeeId + '__' + override.date, override])), [manualOverrides])
+  const overrideFor = (empId, iso) => overrideMap.get(empId + '__' + iso)
+  const savedWeeksMap = useMemo(() => new Map(savedWeeks.map((entry) => [entry.weekId, entry])), [savedWeeks])
   const savedDates = useMemo(() => new Set(savedWeeks.flatMap((entry) => entry.workdays || [])), [savedWeeks])
   const hasSavedWeeks = !hideAlerts && savedWeeks.length > 0
   const hasAmberNotices = useMemo(() => (

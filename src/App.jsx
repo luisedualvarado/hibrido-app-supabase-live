@@ -452,6 +452,7 @@ export default function App() {
   const lastDraftSnapshotJsonRef = useRef('')
   const pendingRemoteSnapshotJsonRef = useRef('')
   const publishBeforeLogoutRef = useRef(null)
+  const localSaveTimerRef = useRef(null)
   const periodKey = periodKeyFor(year, month)
   const hasManualOffice93 = Object.prototype.hasOwnProperty.call(manualOffice93ByPeriod, periodKey)
   const manualOffice93 = hasManualOffice93 ? manualOffice93ByPeriod[periodKey] : EMPTY_ARRAY
@@ -1135,22 +1136,29 @@ export default function App() {
   }, [currentSnapshotJson, isAdmin])
 
   useEffect(() => {
-    if (isReadOnly) return
+    if (isReadOnly) return undefined
     const next = currentSnapshotJson
 
-    try {
-      const previous = window.localStorage.getItem(STORAGE_KEY)
-      if (previous && previous !== next) rememberBackup(previous)
-      window.localStorage.setItem(STORAGE_KEY, next)
-    } catch (error) {
+    if (localSaveTimerRef.current) window.clearTimeout(localSaveTimerRef.current)
+    localSaveTimerRef.current = window.setTimeout(() => {
       try {
-        window.localStorage.removeItem(BACKUP_HISTORY_KEY)
-        window.localStorage.removeItem(BACKUP_KEY)
+        const previous = window.localStorage.getItem(STORAGE_KEY)
+        if (previous && previous !== next) rememberBackup(previous)
         window.localStorage.setItem(STORAGE_KEY, next)
-      } catch (retryError) {
-        setLiveSyncStatus('error')
-        setLiveSyncError('No se pudo guardar en este navegador. Publica para conservar los cambios en Supabase.')
+      } catch (error) {
+        try {
+          window.localStorage.removeItem(BACKUP_HISTORY_KEY)
+          window.localStorage.removeItem(BACKUP_KEY)
+          window.localStorage.setItem(STORAGE_KEY, next)
+        } catch (retryError) {
+          setLiveSyncStatus('error')
+          setLiveSyncError('No se pudo guardar en este navegador. Publica para conservar los cambios en Supabase.')
+        }
       }
+    }, 350)
+
+    return () => {
+      if (localSaveTimerRef.current) window.clearTimeout(localSaveTimerRef.current)
     }
   }, [currentSnapshotJson, isReadOnly])
 
