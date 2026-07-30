@@ -32,47 +32,79 @@ export function assignLockersForMonth({ employees, lockerCount, manualAssignment
   const eligibleEmployees = employees
     .filter((employee) => employee.isActive && employee.baseLocation === 'WEWORK')
     .sort(byName)
+  const eligibleById = new Map(eligibleEmployees.map((employee) => [employee.id, employee]))
+  const floaters = eligibleEmployees.filter((employee) => employee.isFloating).sort(byName)
+  const regulars = eligibleEmployees.filter((employee) => !employee.isFloating).sort(byName)
 
   const lockerMap = new Map(lockerCodes.map((lockerCode) => [lockerCode, []]))
   const assignmentByEmployee = {}
   const ignoredManualAssignments = []
+  const manualByEmployee = new Map()
 
   for (const assignment of manualAssignments) {
-    const employee = eligibleEmployees.find((item) => item.id === assignment.employeeId)
+    const employee = eligibleById.get(assignment.employeeId)
     const lockerNumber = normalizeLockerCode(assignment.lockerNumber, lockerCodes)
-    if (!employee || !lockerNumber) {
+    if (!employee || !lockerNumber || manualByEmployee.has(employee.id)) {
       ignoredManualAssignments.push(assignment)
       continue
     }
-
-    const occupants = lockerMap.get(lockerNumber)
-    if (!occupants || occupants.some((item) => item.employeeId === employee.id) || occupants.length >= 2) {
-      ignoredManualAssignments.push(assignment)
-      continue
-    }
-
-    const record = { employeeId: employee.id, lockerNumber, manual: true }
-    occupants.push(record)
-    assignmentByEmployee[employee.id] = record
+    manualByEmployee.set(employee.id, { ...assignment, lockerNumber })
   }
 
-  const unassignedEmployees = eligibleEmployees.filter((employee) => !assignmentByEmployee[employee.id])
-  const lockersWithSpace = () => Array.from(lockerMap.entries()).filter(([, occupants]) => occupants.length < 2)
+  const lockerEntries = () => Array.from(lockerMap.entries())
+  const lockersWithSpace = () => lockerEntries().filter(([, occupants]) => occupants.length < 2)
+  const emptyLocker = () => lockerEntries().find(([, occupants]) => occupants.length === 0)
+  const sharedLockerWithoutFloaters = () => lockersWithSpace()
+    .filter(([, occupants]) => occupants.length === 1)
+    .filter(([, occupants]) => {
+      const occupant = eligibleById.get(occupants[0].employeeId)
+      return occupant && !occupant.isFloating
+    })
+    .sort((left, right) => left[0].localeCompare(right[0], 'es'))[0]
+  const fallbackSharedLocker = () => lockersWithSpace()
+    .sort((left, right) => left[1].length - right[1].length || left[0].localeCompare(right[0], 'es'))[0]
 
-  for (const employee of unassignedEmployees) {
-    const emptyLocker = Array.from(lockerMap.entries()).find(([, occupants]) => occupants.length === 0)
-    const sharedLocker = lockersWithSpace().sort((left, right) => left[1].length - right[1].length || left[0].localeCompare(right[0], 'es'))[0]
-    const target = emptyLocker || sharedLocker
-
+  const assignEmployeeToLocker = (employee, target, manual = false) => {
     if (!target) {
-      assignmentByEmployee[employee.id] = { employeeId: employee.id, lockerNumber: null, manual: false, unassigned: true }
-      continue
+      assignmentByEmployee[employee.id] = { employeeId: employee.id, lockerNumber: null, manual, unassigned: true }
+      return false
     }
 
     const [lockerNumber, occupants] = target
-    const record = { employeeId: employee.id, lockerNumber, manual: false, shared: occupants.length === 1 }
+    const record = { employeeId: employee.id, lockerNumber, manual, shared: occupants.length === 1 }
     occupants.push(record)
     assignmentByEmployee[employee.id] = record
+    return true
+  }
+
+  for (const employee of floaters) {
+    const manualAssignment = manualByEmployee.get(employee.id)
+    if (manualAssignment) {
+      const occupants = lockerMap.get(manualAssignment.lockerNumber)
+      if (occupants && occupants.length === 0) {
+        assignEmployeeToLocker(employee, [manualAssignment.lockerNumber, occupants], true)
+        continue
+      }
+      ignoredManualAssignments.push(manualAssignment)
+    }
+    assignEmployeeToLocker(employee, emptyLocker(), false)
+  }
+
+  for (const employee of regulars) {
+    const manualAssignment = manualByEmployee.get(employee.id)
+    if (!manualAssignment) continue
+
+    const occupants = lockerMap.get(manualAssignment.lockerNumber)
+    const hasFloaterOccupant = occupants?.some((occupant) => eligibleById.get(occupant.employeeId)?.isFloating)
+    if (occupants && occupants.length < 2 && !hasFloaterOccupant) {
+      assignEmployeeToLocker(employee, [manualAssignment.lockerNumber, occupants], true)
+      continue
+    }
+    ignoredManualAssignments.push(manualAssignment)
+  }
+
+  for (const employee of regulars.filter((employee) => !assignmentByEmployee[employee.id])) {
+    assignEmployeeToLocker(employee, sharedLockerWithoutFloaters() || emptyLocker() || fallbackSharedLocker(), false)
   }
 
   const lockers = Array.from(lockerMap.entries()).map(([lockerNumber, occupants]) => ({
@@ -87,6 +119,7 @@ export function assignLockersForMonth({ employees, lockerCount, manualAssignment
     assignmentByEmployee,
     lockers,
     ignoredManualAssignments,
+    individualFloaterLockerCount: lockers.filter((locker) => locker.occupants.length === 1 && eligibleById.get(locker.occupants[0].employeeId)?.isFloating).length,
     sharedLockerCount: lockers.filter((locker) => locker.shared).length,
     unassignedCount: Object.values(assignmentByEmployee).filter((assignment) => assignment.unassigned).length,
   }

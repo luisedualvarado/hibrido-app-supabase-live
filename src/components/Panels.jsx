@@ -404,6 +404,7 @@ export function Lockers({ employees, lockerResult, manualLockers, setManualLocke
         <Kpi label="Mes" value={MONTH_LABEL[month]} hint={String(year)} />
         <Kpi label="Lockers" value={params.lockers} />
         <Kpi label="Personas WeWork" value={eligibleEmployees.length} />
+        <Kpi label="Individuales flotantes" value={lockerResult?.individualFloaterLockerCount || 0} tone={(lockerResult?.individualFloaterLockerCount || 0) === eligibleEmployees.filter((employee) => employee.isFloating).length ? 'green' : 'red'} />
         <Kpi label="Lockers compartidos" value={lockerResult?.sharedLockerCount || 0} tone={(lockerResult?.sharedLockerCount || 0) > 0 ? 'amber' : 'green'} />
         <Kpi label="Sin locker" value={lockerResult?.unassignedCount || 0} tone={(lockerResult?.unassignedCount || 0) > 0 ? 'red' : 'green'} />
       </div>
@@ -416,7 +417,7 @@ export function Lockers({ employees, lockerResult, manualLockers, setManualLocke
           </div>
           <div className="card-body">
             <p className="muted" style={{ marginTop: 0, fontSize: 12 }}>
-              La base toma a todas las personas activas que quedan en WeWork este mes. Puedes fijar lockers manualmente por persona; cuando no alcanza, la app comparte un locker entre dos personas.
+              La base toma a todas las personas activas que quedan en WeWork este mes. Los flotantes de WeWork reciben locker individual; el resto comparte lockers entre no flotantes.
             </p>
             <div className="filters">
               <div className="fg" style={{ minWidth: 220 }}>

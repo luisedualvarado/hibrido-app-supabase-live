@@ -9,6 +9,7 @@ import { buildDailySummary } from './validators.js'
 import { initialEmployees } from '../data/initialEmployees.js'
 import { initialAbsences, initialHolidays, defaultParameters } from '../data/initialHolidays.js'
 import { PHYSICAL_SEATS_BY_LOCATION } from './deskLayouts.js'
+import { assignLockersForMonth } from './lockerGenerator.js'
 
 const params = { seatsWeWork: 20, seats93: 10, parkingSpots: 3, lockers: 36 }
 
@@ -618,6 +619,83 @@ test('july office 93 has only Gabriel and Juan as monthly floaters', () => {
     .map((item) => item.id)
 
   assert.deepEqual(monthlyFloaters, ['garcia-gabriel', 'quiroz-millan-juan'])
+})
+test('lockers are assigned only to employees who remain in WeWork for the month', () => {
+  const weworkEmployee = employee('wework-person')
+  const office93Employee = employee('office93-person')
+  const effectiveEmployees = applyOffice93Assignment([weworkEmployee, office93Employee], [office93Employee.id])
+
+  const result = assignLockersForMonth({
+    employees: effectiveEmployees,
+    lockerCount: 2,
+    manualAssignments: [
+      { employeeId: office93Employee.id, lockerNumber: '001' },
+      { employeeId: weworkEmployee.id, lockerNumber: '002' },
+    ],
+  })
+
+  assert.deepEqual(result.eligibleEmployees.map((item) => item.id), [weworkEmployee.id])
+  assert.equal(result.assignmentByEmployee[weworkEmployee.id]?.lockerNumber, '002')
+  assert.equal(result.assignmentByEmployee[office93Employee.id], undefined)
+  assert.deepEqual(result.ignoredManualAssignments, [{ employeeId: office93Employee.id, lockerNumber: '001' }])
+})
+
+test('WeWork floaters receive individual lockers before regular employees share lockers', () => {
+  const floaterOne = employee('floater-one', { isFloating: true })
+  const floaterTwo = employee('floater-two', { isFloating: true })
+  const regularOne = employee('regular-one', { isFloating: false })
+  const regularTwo = employee('regular-two', { isFloating: false })
+
+  const result = assignLockersForMonth({
+    employees: [regularTwo, floaterTwo, regularOne, floaterOne],
+    lockerCount: 3,
+  })
+
+  assert.equal(result.assignmentByEmployee[floaterOne.id]?.lockerNumber, '001')
+  assert.equal(result.assignmentByEmployee[floaterTwo.id]?.lockerNumber, '002')
+  assert.equal(result.assignmentByEmployee[floaterOne.id]?.shared, false)
+  assert.equal(result.assignmentByEmployee[floaterTwo.id]?.shared, false)
+  assert.equal(result.assignmentByEmployee[regularOne.id]?.lockerNumber, '003')
+  assert.equal(result.assignmentByEmployee[regularTwo.id]?.lockerNumber, '003')
+  assert.equal(result.lockers.find((locker) => locker.lockerNumber === '003')?.shared, true)
+})
+
+test('twenty one WeWork floaters receive individual lockers with thirty six lockers', () => {
+  const floaters = Array.from({ length: 21 }, (_, index) => employee(`floater-${String(index + 1).padStart(2, '0')}`, { isFloating: true }))
+  const regulars = Array.from({ length: 22 }, (_, index) => employee(`regular-${String(index + 1).padStart(2, '0')}`, { isFloating: false }))
+
+  const result = assignLockersForMonth({
+    employees: [...regulars, ...floaters],
+    lockerCount: 36,
+  })
+
+  const floaterLockerNumbers = new Set(floaters.map((person) => result.assignmentByEmployee[person.id]?.lockerNumber))
+  assert.equal(floaterLockerNumbers.size, 21)
+  assert.equal(floaters.every((person) => result.assignmentByEmployee[person.id]?.shared === false), true)
+  assert.equal(floaters.every((person) => {
+    const lockerNumber = result.assignmentByEmployee[person.id]?.lockerNumber
+    return result.lockers.find((locker) => locker.lockerNumber === lockerNumber)?.occupants.length === 1
+  }), true)
+  assert.equal(result.unassignedCount, 0)
+})
+
+test('manual locker assignments cannot make WeWork floaters share with regular employees', () => {
+  const floater = employee('floater-person', { isFloating: true })
+  const regular = employee('regular-person', { isFloating: false })
+
+  const result = assignLockersForMonth({
+    employees: [regular, floater],
+    lockerCount: 2,
+    manualAssignments: [
+      { employeeId: regular.id, lockerNumber: '001' },
+      { employeeId: floater.id, lockerNumber: '001' },
+    ],
+  })
+
+  assert.equal(result.assignmentByEmployee[floater.id]?.lockerNumber, '001')
+  assert.equal(result.assignmentByEmployee[floater.id]?.shared, false)
+  assert.equal(result.assignmentByEmployee[regular.id]?.lockerNumber, '002')
+  assert.equal(result.ignoredManualAssignments.some((assignment) => assignment.employeeId === regular.id), true)
 })
 test('floating seats do not borrow desks from another monthly office group', () => {
   const date = '2026-07-15'
