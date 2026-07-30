@@ -79,14 +79,7 @@ export function assignLockersForMonth({ employees, lockerCount, manualAssignment
 
   for (const employee of floaters) {
     const manualAssignment = manualByEmployee.get(employee.id)
-    if (manualAssignment) {
-      const occupants = lockerMap.get(manualAssignment.lockerNumber)
-      if (occupants && occupants.length === 0) {
-        assignEmployeeToLocker(employee, [manualAssignment.lockerNumber, occupants], true)
-        continue
-      }
-      ignoredManualAssignments.push(manualAssignment)
-    }
+    if (manualAssignment) ignoredManualAssignments.push(manualAssignment)
     assignEmployeeToLocker(employee, emptyLocker(), false)
   }
 

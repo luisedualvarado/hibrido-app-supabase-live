@@ -351,12 +351,20 @@ export function Lockers({ employees, lockerResult, manualLockers, setManualLocke
     setManualLockers(undefined)
   }
   const occupiedLockers = lockers.filter((locker) => locker.occupants.length)
+  const weworkFloaterCount = eligibleEmployees.filter((employee) => employee.isFloating).length
+  const individualFloaterLockerCount = lockerResult?.individualFloaterLockerCount || 0
   const showManualControls = !readOnly
 
   const summaryCard = (
     <div className="card">
       <div className="card-head"><h3>Resumen mensual de lockers</h3></div>
       <div className="card-body">
+        <div className="kpi-grid" style={{ marginBottom: 18 }}>
+          <Kpi label="Flotantes WeWork" value={weworkFloaterCount} />
+          <Kpi label="Individuales flotantes" value={individualFloaterLockerCount} hint={`${individualFloaterLockerCount}/${weworkFloaterCount}`} tone={individualFloaterLockerCount === weworkFloaterCount ? 'green' : 'red'} />
+          <Kpi label="Lockers compartidos" value={lockerResult?.sharedLockerCount || 0} tone={(lockerResult?.sharedLockerCount || 0) > 0 ? 'amber' : 'green'} />
+          <Kpi label="Sin locker" value={lockerResult?.unassignedCount || 0} tone={(lockerResult?.unassignedCount || 0) > 0 ? 'red' : 'green'} />
+        </div>
         {occupiedLockers.length === 0 ? (
           <div className="empty compact">Aun no hay lockers asignados.</div>
         ) : (
@@ -404,7 +412,7 @@ export function Lockers({ employees, lockerResult, manualLockers, setManualLocke
         <Kpi label="Mes" value={MONTH_LABEL[month]} hint={String(year)} />
         <Kpi label="Lockers" value={params.lockers} />
         <Kpi label="Personas WeWork" value={eligibleEmployees.length} />
-        <Kpi label="Individuales flotantes" value={lockerResult?.individualFloaterLockerCount || 0} tone={(lockerResult?.individualFloaterLockerCount || 0) === eligibleEmployees.filter((employee) => employee.isFloating).length ? 'green' : 'red'} />
+        <Kpi label="Individuales flotantes" value={individualFloaterLockerCount} hint={`${individualFloaterLockerCount}/${weworkFloaterCount}`} tone={individualFloaterLockerCount === weworkFloaterCount ? 'green' : 'red'} />
         <Kpi label="Lockers compartidos" value={lockerResult?.sharedLockerCount || 0} tone={(lockerResult?.sharedLockerCount || 0) > 0 ? 'amber' : 'green'} />
         <Kpi label="Sin locker" value={lockerResult?.unassignedCount || 0} tone={(lockerResult?.unassignedCount || 0) > 0 ? 'red' : 'green'} />
       </div>
