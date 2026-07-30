@@ -18,6 +18,10 @@ test('WeWork physical inventory excludes desks 24, 25 and 26', () => {
   assert.deepEqual(PHYSICAL_SEATS_BY_LOCATION.WEWORK.filter((seat) => ['24', '25', '26'].includes(seat)), [])
 })
 
+
+test('Oficina 93 physical inventory excludes desk 42', () => {
+  assert.equal(PHYSICAL_SEATS_BY_LOCATION.OFICINA_93.includes('42'), false)
+})
 test('WeWork desk 3 can be assigned to a floater when free', () => {
   const date = '2026-06-01'
   const regularOne = employee('regular-one', { isFloating: false, baseSeat: '1' })
