@@ -563,6 +563,15 @@ export default function App() {
     setMonth(next.month)
   }
 
+  const createNextMonth = () => {
+    const nextMonth = month === 11 ? 0 : month + 1
+    const nextYear = month === 11 ? year + 1 : year
+    const next = normalizePeriod(nextYear, nextMonth)
+    setYear(next.year)
+    setMonth(next.month)
+    setGenerationTick((tick) => tick + 1)
+  }
+
   const computed = useMemo(() => {
     const isPublishedJune = PUBLIC_PUBLISHED_JUNE_LOCK && isReadOnly && year === MIN_YEAR && month === MIN_MONTH
     const publicJuneOffice93 = isPublishedJune
@@ -1230,6 +1239,7 @@ export default function App() {
                 )}
               </div>
             )}
+            {!isReadOnly && showMonthControl && <button className="btn btn-ghost" onClick={createNextMonth}>Crear siguiente mes</button>}
             {!isReadOnly && <button className="btn btn-ghost" onClick={clearOverrides}>Limpiar ajustes</button>}
             {!isReadOnly && <button className="btn btn-green" onClick={regenerate}>Generar programacion</button>}
           </div>
