@@ -53,6 +53,7 @@ const MIN_MONTH = 5
 const PUBLIC_READ_ONLY = import.meta.env.VITE_PUBLIC_READ_ONLY === 'true'
 const PUBLIC_PUBLISHED_JUNE_LOCK = import.meta.env.VITE_PUBLIC_PUBLISHED_JUNE === 'true'
 const PREVIEW_SNAPSHOT_URL = import.meta.env.VITE_PREVIEW_SNAPSHOT_URL || ''
+const DEMO_SEPTEMBER_2026 = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === 'september'
 const PUBLIC_VIEWS = ['dashboard', 'monthly', 'daily', 'desks', 'lockers']
 const PUBLIC_JUNE_OFFICE93_IDS = [
   'hilario-martin',
@@ -73,6 +74,21 @@ const PUBLIC_JUNE_OFFICE93_IDS = [
 ]
 const PUBLIC_JUNE_PARAMS_OVERRIDE = {
   seats93: 11,
+}
+const SEPTEMBER_2026_MONTH_INDEX = 8
+const SEPTEMBER_2026_SEAT_CAPACITY = { seatsWeWork: 42, seats93: 13 }
+
+function hasSeptember2026SeatExpansion(year, month) {
+  return year > 2026 || (year === 2026 && month >= SEPTEMBER_2026_MONTH_INDEX)
+}
+
+function applyPeriodSeatCapacity(params, year, month) {
+  if (!hasSeptember2026SeatExpansion(year, month)) return params
+  return {
+    ...params,
+    seatsWeWork: Math.max(Number(params.seatsWeWork) || 0, SEPTEMBER_2026_SEAT_CAPACITY.seatsWeWork),
+    seats93: Math.max(Number(params.seats93) || 0, SEPTEMBER_2026_SEAT_CAPACITY.seats93),
+  }
 }
 const PUBLIC_JUNE_LOCKER_ASSIGNMENTS = [
   { employeeId: 'archila-karen', lockerNumber: '001' },
@@ -409,11 +425,14 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(() => ADMIN_ACCESS_ENABLED && loadAdminSession())
   const [authError, setAuthError] = useState('')
   const isReadOnly = PUBLIC_READ_ONLY && !isAdmin
-  const editableStored = isReadOnly ? {} : stored
-  const initialPeriod = useMemo(() => normalizePeriod(
-    typeof editableStored.year === 'number' ? editableStored.year : now.getFullYear(),
-    typeof editableStored.month === 'number' ? editableStored.month : now.getMonth()
-  ), [editableStored, now])
+  const editableStored = isReadOnly || DEMO_SEPTEMBER_2026 ? {} : stored
+  const initialPeriod = useMemo(() => {
+    if (DEMO_SEPTEMBER_2026) return { year: 2026, month: 8 }
+    return normalizePeriod(
+      typeof editableStored.year === 'number' ? editableStored.year : now.getFullYear(),
+      typeof editableStored.month === 'number' ? editableStored.month : now.getMonth()
+    )
+  }, [editableStored, now])
   const [view, setView] = useState('dashboard')
   const showPeriodControls = ['dashboard', 'monthly', 'daily', 'desks', 'office93', 'lockers'].includes(view)
   const [employees, setEmployees] = useState(mergeEmployeeSeatDefaults(editableStored.employees || initialEmployees))
@@ -577,10 +596,11 @@ export default function App() {
     const publicJuneOffice93 = isPublishedJune
       ? PUBLIC_JUNE_OFFICE93_IDS
       : null
+    const periodParams = applyPeriodSeatCapacity(params, year, month)
     const effectiveParams = isPublishedJune
-      ? { ...params, ...PUBLIC_JUNE_PARAMS_OVERRIDE }
-      : params
-    const office93AssignedAuto = assignOffice93ForMonth({ employees: employeesForPeriod, params, monthIndex: month, manualOffice93 })
+      ? { ...periodParams, ...PUBLIC_JUNE_PARAMS_OVERRIDE }
+      : periodParams
+    const office93AssignedAuto = assignOffice93ForMonth({ employees: employeesForPeriod, params: effectiveParams, monthIndex: month, manualOffice93 })
     const office93Assigned = publicJuneOffice93 || (hasManualOffice93 ? Array.from(new Set(manualOffice93)) : office93AssignedAuto)
     const office93Employees = applyOffice93Assignment(employeesForPeriod, office93Assigned)
     const effectiveEmployeesAuto = applyMonthlyFloatingAssignment(office93Employees, { year, month, office93Assigned })
@@ -919,7 +939,7 @@ export default function App() {
 
 
   useEffect(() => {
-    if (!PREVIEW_SNAPSHOT_URL || didHydratePreviewSnapshot) return
+    if (DEMO_SEPTEMBER_2026 || !PREVIEW_SNAPSHOT_URL || didHydratePreviewSnapshot) return
     let cancelled = false
     fetch(PREVIEW_SNAPSHOT_URL)
       .then((response) => {
@@ -1037,7 +1057,7 @@ export default function App() {
   }, [currentSnapshotJson])
 
   useEffect(() => {
-    if (!LIVE_SYNC_ENABLED) return undefined
+    if (DEMO_SEPTEMBER_2026 || !LIVE_SYNC_ENABLED) return undefined
     if (!isReadOnly && !isAdmin) {
       setLiveSyncReady(false)
       setLiveSyncStatus('idle')
@@ -1172,7 +1192,7 @@ export default function App() {
   }, [currentSnapshotJson, isReadOnly])
 
   useEffect(() => {
-    if (!LIVE_SYNC_ENABLED || isReadOnly || !isAdmin || !liveSyncReady) return undefined
+    if (DEMO_SEPTEMBER_2026 || !LIVE_SYNC_ENABLED || isReadOnly || !isAdmin || !liveSyncReady) return undefined
     if (currentSnapshotJson === lastDraftSnapshotJsonRef.current) return undefined
 
     setLiveSyncStatus('saving-draft')

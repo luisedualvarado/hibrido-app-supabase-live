@@ -10,7 +10,7 @@
 
 import {
   getDaysInMonth, getWorkdaysByWeek, isWeekend, isHoliday, holidayName,
-  weekdayKey, parseISO, rangeDates, WEEKDAY_LABEL,
+  weekdayKey, rangeDates, WEEKDAY_LABEL,
 } from './dateUtils.js'
 import {
   getAllowedDatesForEmployee,
@@ -22,6 +22,11 @@ import {
 } from './rotationPolicy.js'
 
 const MAX_OPERATIONAL_HOME_DAYS = 2
+const CONSECUTIVE_DOUBLE_HOME_MONTHS = new Set(['2026-8'])
+
+function shouldForceConsecutiveDoubleHome(year, month) {
+  return CONSECUTIVE_DOUBLE_HOME_MONTHS.has(`${year}-${month}`)
+}
 
 function seededTieBreaker(seed, ...parts) {
   const text = `${seed}::${parts.join('::')}`
@@ -127,13 +132,14 @@ export function scoreDateForEmployee(employee, iso, ctx) {
   return score
 }
 
-function consecutivePairs(dates) {
+function consecutivePairs(dates, workdays) {
+  const available = new Set(dates)
+  const orderedDays = workdays || dates
   const pairs = []
-  for (let index = 0; index < dates.length - 1; index += 1) {
-    const current = parseISO(dates[index])
-    const next = parseISO(dates[index + 1])
-    const diffDays = (next - current) / (1000 * 60 * 60 * 24)
-    if (diffDays === 1) pairs.push([dates[index], dates[index + 1]])
+  for (let index = 0; index < orderedDays.length - 1; index += 1) {
+    const first = orderedDays[index]
+    const second = orderedDays[index + 1]
+    if (available.has(first) && available.has(second)) pairs.push([first, second])
   }
   return pairs
 }
@@ -197,10 +203,28 @@ function hasAdjacentHomeAfterMove(cells, employeeId, iso, workdays, oldHomeIso =
   })
 }
 
-function canAssignHome(employee, iso, cells, monthWorkdays, oldHomeIso = null) {
+function hasConsecutiveHomePairAfterMove(cells, employeeId, iso, workdays, oldHomeIso = null) {
+  const homeDays = new Set(workdays.filter((day) => cells[`${employeeId}__${day}`]?.status === 'HOME'))
+  if (oldHomeIso) homeDays.delete(oldHomeIso)
+  homeDays.add(iso)
+  for (let index = 0; index < workdays.length - 1; index += 1) {
+    if (homeDays.has(workdays[index]) && homeDays.has(workdays[index + 1])) return true
+  }
+  return false
+}
+
+function canAssignHome(employee, iso, cells, monthWorkdays, oldHomeIso = null, options = {}) {
   if (!isRotationEligible(employee)) return false
   if (hasHardRestriction(employee) && !isDateAllowedForEmployee(employee, iso)) return false
   if (employee.avoidConsecutiveHomeDays && hasAdjacentHomeAfterMove(cells, employee.id, iso, monthWorkdays, oldHomeIso)) return false
+  if (
+    options.forceConsecutiveDoubleHome &&
+    employee.doubleHomeConsecutive &&
+    !employee.avoidConsecutiveHomeDays &&
+    !hasConsecutiveHomePairAfterMove(cells, employee.id, iso, monthWorkdays, oldHomeIso)
+  ) {
+    return false
+  }
   return true
 }
 
@@ -245,7 +269,7 @@ function setExtraHomeDay(employee, iso, cells, homeCountByDay, message, extraAle
   homeCountByDay[iso] = (homeCountByDay[iso] || 0) + 1
 }
 
-function balanceOfficeCapacity({ employees, cells, days, weeks, holidays, params, homeCountByDay, generationSeed, location, addAlert }) {
+function balanceOfficeCapacity({ employees, cells, days, weeks, holidays, params, homeCountByDay, generationSeed, location, addAlert, forceConsecutiveDoubleHome = false }) {
   const seats = Math.max(0, Number(location === 'OFICINA_93' ? params.seats93 : params.seatsWeWork) || 0)
   if (seats === 0) return
   const officeEmployees = employees.filter((employee) =>
@@ -264,8 +288,8 @@ function balanceOfficeCapacity({ employees, cells, days, weeks, holidays, params
         .filter((employee) => isRotationEligible(employee))
         .sort((a, b) => {
           if (!!a.isFloating !== !!b.isFloating) return a.isFloating ? 1 : -1
-          const aCanRespect = canAssignHome(a, iso, cells, monthWorkdays)
-          const bCanRespect = canAssignHome(b, iso, cells, monthWorkdays)
+          const aCanRespect = canAssignHome(a, iso, cells, monthWorkdays, null, { forceConsecutiveDoubleHome })
+          const bCanRespect = canAssignHome(b, iso, cells, monthWorkdays, null, { forceConsecutiveDoubleHome })
           if (aCanRespect !== bCanRespect) return aCanRespect ? -1 : 1
           const aTarget = weeklyHomeTarget(a)
           const bTarget = weeklyHomeTarget(b)
@@ -280,7 +304,7 @@ function balanceOfficeCapacity({ employees, cells, days, weeks, holidays, params
           const movableHomeDay = currentHomeDays.find((oldHomeIso) =>
             oldHomeIso !== iso &&
             officePresentCount(employees, cells, oldHomeIso, location) + 1 <= seats &&
-            canAssignHome(candidate, iso, cells, monthWorkdays, oldHomeIso)
+            canAssignHome(candidate, iso, cells, monthWorkdays, oldHomeIso, { forceConsecutiveDoubleHome })
           )
           if (movableHomeDay) {
             moveHomeDay(candidate, movableHomeDay, iso, cells, homeCountByDay, `TC movido para evitar sobrecupo en ${officeName}`)
@@ -293,12 +317,12 @@ function balanceOfficeCapacity({ employees, cells, days, weeks, holidays, params
       if (!solved) {
         const extraCandidate = orderedCandidates.find((candidate) =>
           week &&
-          canAssignHome(candidate, iso, cells, monthWorkdays) &&
+          canAssignHome(candidate, iso, cells, monthWorkdays, null, { forceConsecutiveDoubleHome }) &&
           countHomeDays(cells, candidate.id, week.workdays) < weeklyHomeTarget(candidate)
         )
         if (!extraCandidate) {
           const operationalCandidate = orderedCandidates
-            .filter((candidate) => week && canAssignHome(candidate, iso, cells, monthWorkdays))
+            .filter((candidate) => week && canAssignHome(candidate, iso, cells, monthWorkdays, null, { forceConsecutiveDoubleHome }))
             .filter((candidate) => countHomeDays(cells, candidate.id, week.workdays) < MAX_OPERATIONAL_HOME_DAYS)
             .sort((a, b) => {
               const targetDiff = weeklyHomeTarget(a) - weeklyHomeTarget(b)
@@ -347,6 +371,8 @@ export function enforceNoOfficeOvercapacity(schedule, employees, holidays, param
   const addAlert = (severity, message, rule, extra = {}) =>
     alerts.push({ id: `${rule}-${alerts.length}`, severity, message, rule, ...extra })
 
+  const forceConsecutiveDoubleHome = shouldForceConsecutiveDoubleHome(schedule.year, schedule.month)
+
   balanceOfficeCapacity({
     employees,
     cells,
@@ -358,6 +384,7 @@ export function enforceNoOfficeOvercapacity(schedule, employees, holidays, param
     generationSeed,
     location: 'OFICINA_93',
     addAlert,
+    forceConsecutiveDoubleHome,
   })
   balanceOfficeCapacity({
     employees,
@@ -370,6 +397,7 @@ export function enforceNoOfficeOvercapacity(schedule, employees, holidays, param
     generationSeed,
     location: 'WEWORK',
     addAlert,
+    forceConsecutiveDoubleHome,
   })
 
   return {
@@ -425,6 +453,7 @@ export function enforceRotationPolicy(schedule, employees) {
 // ---- Generación principal -------------------------------------------------
 export function generateMonthlySchedule(ctx) {
   const { employees, holidays, absences, manualOverrides, month, year, params, generationSeed = 0 } = ctx
+  const forceConsecutiveDoubleHome = shouldForceConsecutiveDoubleHome(year, month)
   const days = getDaysInMonth(year, month)
   const weeks = getWorkdaysByWeek(year, month, holidays)
 
@@ -488,9 +517,10 @@ export function generateMonthlySchedule(ctx) {
     for (const e of order) {
       if (e.doubleHomeConsecutive) {
         const monthWorkdays = days.filter((day) => !isWeekend(day) && !isHoliday(day, holidays))
-        const buildPairs = (dates) => e.avoidConsecutiveHomeDays
-          ? nonConsecutivePairs(dates, workdays)
-          : pairCandidates(dates)
+        const buildPairs = (dates) => {
+          if (e.avoidConsecutiveHomeDays) return nonConsecutivePairs(dates, workdays)
+          return forceConsecutiveDoubleHome ? consecutivePairs(dates, workdays) : pairCandidates(dates)
+        }
         let candidates = getAllowedDatesForEmployee(e, workdays).filter((iso) => {
           const c = cells[`${e.id}__${iso}`]
           return c && c.status === 'OFFICE'
@@ -639,8 +669,8 @@ export function generateMonthlySchedule(ctx) {
     }
   }
 
-  balanceOfficeCapacity({ employees, cells, days, weeks, holidays, params, homeCountByDay, generationSeed, location: 'OFICINA_93', addAlert })
-  balanceOfficeCapacity({ employees, cells, days, weeks, holidays, params, homeCountByDay, generationSeed, location: 'WEWORK', addAlert })
+  balanceOfficeCapacity({ employees, cells, days, weeks, holidays, params, homeCountByDay, generationSeed, location: 'OFICINA_93', addAlert, forceConsecutiveDoubleHome })
+  balanceOfficeCapacity({ employees, cells, days, weeks, holidays, params, homeCountByDay, generationSeed, location: 'WEWORK', addAlert, forceConsecutiveDoubleHome })
 
   const finalHomeCountByDay = rebuildHomeCountByDay(cells, days, employees)
 

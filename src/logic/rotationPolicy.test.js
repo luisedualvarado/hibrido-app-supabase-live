@@ -8,7 +8,7 @@ import { buildFloatingSeatEmployees, weeklyHomeTarget } from './rotationPolicy.j
 import { buildDailySummary } from './validators.js'
 import { initialEmployees } from '../data/initialEmployees.js'
 import { initialAbsences, initialHolidays, defaultParameters } from '../data/initialHolidays.js'
-import { PHYSICAL_SEATS_BY_LOCATION } from './deskLayouts.js'
+import { PHYSICAL_SEATS_BY_LOCATION, physicalSeatsByLocationForPeriod } from './deskLayouts.js'
 import { assignLockersForMonth } from './lockerGenerator.js'
 
 const params = { seatsWeWork: 20, seats93: 10, parkingSpots: 3, lockers: 36 }
@@ -21,6 +21,20 @@ test('WeWork physical inventory excludes desks 24, 25 and 26', () => {
 
 test('Oficina 93 physical inventory excludes desk 42', () => {
   assert.equal(PHYSICAL_SEATS_BY_LOCATION.OFICINA_93.includes('42'), false)
+})
+test('seat expansion starts in September 2026 only', () => {
+  const augustSeats = physicalSeatsByLocationForPeriod(2026, 7)
+  const septemberSeats = physicalSeatsByLocationForPeriod(2026, 8)
+
+  assert.equal(augustSeats.WEWORK.length, 36)
+  assert.equal(augustSeats.OFICINA_93.length, 11)
+  assert.deepEqual(augustSeats.WEWORK.filter((seat) => seat.startsWith('W')), [])
+  assert.deepEqual(augustSeats.OFICINA_93.filter((seat) => ['ZZ', 'XX'].includes(seat)), [])
+
+  assert.equal(septemberSeats.WEWORK.length, 42)
+  assert.equal(septemberSeats.OFICINA_93.length, 13)
+  assert.deepEqual(septemberSeats.WEWORK.slice(-6), ['W1', 'W2', 'W3', 'W4', 'W5', 'W6'])
+  assert.deepEqual(septemberSeats.OFICINA_93.slice(-2), ['ZZ', 'XX'])
 })
 test('WeWork desk 3 can be assigned to a floater when free', () => {
   const date = '2026-06-01'
@@ -72,6 +86,32 @@ function homeDays(schedule, employeeId, workdays) {
   return workdays.filter((date) => schedule.cells[`${employeeId}__${date}`]?.status === 'HOME')
 }
 
+test('September WeWork floaters can use new W desks after legacy desks are occupied', () => {
+  const date = '2026-09-01'
+  const legacySeats = PHYSICAL_SEATS_BY_LOCATION.WEWORK
+  const regulars = legacySeats.map((seat) => employee(`regular-${seat}`, { isFloating: false, baseSeat: seat }))
+  const floater = employee('september-floater', { isFloating: true })
+  const employees = [...regulars, floater]
+  const schedule = {
+    year: 2026,
+    month: 8,
+    days: [date],
+    weeks: [{ weekId: '2026-W36', workdays: [date] }],
+    alerts: [],
+    cells: Object.fromEntries(employees.map((person) => [`${person.id}__${date}`, {
+      employeeId: person.id,
+      date,
+      status: 'OFFICE',
+      source: 'TEST',
+      alerts: [],
+    }])),
+  }
+
+  const { result } = assignFloatingSeats(schedule, employees, [date], { ...params, seatsWeWork: 42, seats93: 0 })
+
+  assert.equal(result[date].assignedByEmp[floater.id]?.seat, 'W1')
+  assert.equal(result[date].unseated.length, 0)
+})
 test('only approved employees receive TC', () => {
   const approved = employee('approved')
   const notApproved = employee('not-approved', { hybridApproved: false })
@@ -119,6 +159,27 @@ test('weekly TC target is exactly one or two when valid days exist', () => {
   }
 })
 
+test('September 2026 double TC is assigned on consecutive workdays', () => {
+  const two = employee('two-september', { doubleHomeConsecutive: true })
+  const schedule = generateMonthlySchedule({
+    employees: [two],
+    holidays: [],
+    absences: [],
+    manualOverrides: [],
+    month: 8,
+    year: 2026,
+    params,
+    generationSeed: 'september-demo',
+  })
+
+  for (const week of getWorkdaysByWeek(2026, 8, [])) {
+    const assigned = homeDays(schedule, two.id, week.workdays)
+    assert.equal(assigned.length, 2)
+    const firstIndex = week.workdays.indexOf(assigned[0])
+    const secondIndex = week.workdays.indexOf(assigned[1])
+    assert.equal(secondIndex - firstIndex, 1)
+  }
+})
 test('capacity balancing uses automatic capacity TC without sending non-approved employees home', () => {
   const approved = employee('approved')
   const notApproved = employee('not-approved', { hybridApproved: false })

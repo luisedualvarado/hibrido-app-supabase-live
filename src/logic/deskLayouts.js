@@ -1,3 +1,14 @@
+const SEPTEMBER_2026_MONTH_INDEX = 8
+const SEPTEMBER_2026_EXTRA_SEATS = {
+  WEWORK: ['W1', 'W2', 'W3', 'W4', 'W5', 'W6'],
+  OFICINA_93: ['ZZ', 'XX'],
+}
+
+export function hasSeptember2026SeatExpansion(year, month) {
+  if (typeof year !== 'number' || typeof month !== 'number') return false
+  return year > 2026 || (year === 2026 && month >= SEPTEMBER_2026_MONTH_INDEX)
+}
+
 export const PHYSICAL_SEATS_BY_LOCATION = {
   WEWORK: [
     '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17',
@@ -5,6 +16,14 @@ export const PHYSICAL_SEATS_BY_LOCATION = {
     '148', '149', '150', '151', '152', '153', '154',
   ],
   OFICINA_93: ['39', '41', '43', '44', '45', '46', '47', '48', '49', '51', 'NN'],
+}
+
+export function physicalSeatsByLocationForPeriod(year, month) {
+  if (!hasSeptember2026SeatExpansion(year, month)) return PHYSICAL_SEATS_BY_LOCATION
+  return {
+    WEWORK: [...PHYSICAL_SEATS_BY_LOCATION.WEWORK, ...SEPTEMBER_2026_EXTRA_SEATS.WEWORK],
+    OFICINA_93: [...PHYSICAL_SEATS_BY_LOCATION.OFICINA_93, ...SEPTEMBER_2026_EXTRA_SEATS.OFICINA_93],
+  }
 }
 
 export const DESK_PLAN_META = {

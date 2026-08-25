@@ -1,6 +1,6 @@
 // parkingGenerator.js — asignación mensual de parqueaderos por rotación.
 import { weekdayKey } from './dateUtils.js'
-import { PHYSICAL_SEATS_BY_LOCATION } from './deskLayouts.js'
+import { physicalSeatsByLocationForPeriod } from './deskLayouts.js'
 import { hasHardRestriction, isDateAllowedForEmployee, isFloatingSeatEligible, isRotationEligible, weeklyHomeTarget } from './rotationPolicy.js'
 
 const MAX_OPERATIONAL_HOME_DAYS = 2
@@ -74,9 +74,10 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
   }
   const compareSeat = (left, right) => String(left).localeCompare(String(right), 'es', { numeric: true })
   const sortByName = (left, right) => left.name.localeCompare(right.name, 'es')
+  const physicalSeatsByLocation = physicalSeatsByLocationForPeriod(schedule.year, schedule.month)
   const seatsByLocation = {
-    WEWORK: [...PHYSICAL_SEATS_BY_LOCATION.WEWORK].sort(compareSeat),
-    OFICINA_93: [...PHYSICAL_SEATS_BY_LOCATION.OFICINA_93].sort(compareSeat),
+    WEWORK: [...physicalSeatsByLocation.WEWORK].sort(compareSeat),
+    OFICINA_93: [...physicalSeatsByLocation.OFICINA_93].sort(compareSeat),
   }
   const configuredSeatLimit = (location) => {
     const configured = Number(location === 'OFICINA_93' ? params.seats93 : params.seatsWeWork)
