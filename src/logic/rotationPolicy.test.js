@@ -86,6 +86,31 @@ function homeDays(schedule, employeeId, workdays) {
   return workdays.filter((date) => schedule.cells[`${employeeId}__${date}`]?.status === 'HOME')
 }
 
+test('September floating seat assignment prioritizes new seats', () => {
+  const date = '2026-09-01'
+  const weFloater = employee('september-we-floater', { isFloating: true })
+  const officeFloater = employee('september-office-floater', { isFloating: true, baseLocation: 'OFICINA_93' })
+  const employees = [weFloater, officeFloater]
+  const schedule = {
+    year: 2026,
+    month: 8,
+    days: [date],
+    weeks: [{ weekId: '2026-W36', workdays: [date] }],
+    alerts: [],
+    cells: Object.fromEntries(employees.map((person) => [`${person.id}__${date}`, {
+      employeeId: person.id,
+      date,
+      status: 'OFFICE',
+      source: 'TEST',
+      alerts: [],
+    }])),
+  }
+
+  const { result } = assignFloatingSeats(schedule, employees, [date], { ...params, seatsWeWork: 42, seats93: 13 })
+
+  assert.equal(result[date].assignedByEmp[weFloater.id]?.seat, 'W1')
+  assert.equal(result[date].assignedByEmp[officeFloater.id]?.seat, 'ZZ')
+})
 test('September WeWork floaters can use new W desks after legacy desks are occupied', () => {
   const date = '2026-09-01'
   const legacySeats = PHYSICAL_SEATS_BY_LOCATION.WEWORK

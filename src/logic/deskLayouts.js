@@ -26,6 +26,14 @@ export function physicalSeatsByLocationForPeriod(year, month) {
   }
 }
 
+export function floatingSeatPriorityByLocationForPeriod(year, month) {
+  if (!hasSeptember2026SeatExpansion(year, month)) return PHYSICAL_SEATS_BY_LOCATION
+  return {
+    WEWORK: [...SEPTEMBER_2026_EXTRA_SEATS.WEWORK, ...PHYSICAL_SEATS_BY_LOCATION.WEWORK],
+    OFICINA_93: [...SEPTEMBER_2026_EXTRA_SEATS.OFICINA_93, ...PHYSICAL_SEATS_BY_LOCATION.OFICINA_93],
+  }
+}
+
 export const DESK_PLAN_META = {
   WEWORK: {
     title: 'Plano general WeWork',
