@@ -444,7 +444,7 @@ export default function App() {
   const [year, setYear] = useState(initialPeriod.year)
   const editableMonthOptions = MONTH_LABEL.map((_, index) => index)
     .filter((index) => year !== MIN_YEAR || index >= MIN_MONTH)
-  const publicLastMonth = year === MIN_YEAR ? Math.max(MIN_MONTH + 1, month) : 11
+  const publicLastMonth = year === MIN_YEAR ? Math.max(SEPTEMBER_2026_MONTH_INDEX, month) : 11
   const publicMonthOptions = editableMonthOptions.filter((index) => year !== MIN_YEAR || index <= publicLastMonth)
   const monthOptions = isReadOnly ? publicMonthOptions : editableMonthOptions
   const showMonthControl = showPeriodControls
