@@ -184,6 +184,30 @@ test('weekly TC target is exactly one or two when valid days exist', () => {
   }
 })
 
+test('September 2026 schedule completes trailing workweek', () => {
+  const person = employee('september-person')
+  const schedule = generateMonthlySchedule({
+    employees: [person],
+    holidays: [],
+    absences: [],
+    manualOverrides: [],
+    month: 8,
+    year: 2026,
+    params,
+    generationSeed: 'september-trailing-week',
+  })
+  const lastWeek = schedule.weeks[schedule.weeks.length - 1]
+
+  assert.ok(schedule.days.includes('2026-10-01'))
+  assert.ok(schedule.days.includes('2026-10-02'))
+  assert.deepEqual(lastWeek.workdays.slice(-5), [
+    '2026-09-28',
+    '2026-09-29',
+    '2026-09-30',
+    '2026-10-01',
+    '2026-10-02',
+  ])
+})
 test('September 2026 double TC is assigned on consecutive workdays', () => {
   const two = employee('two-september', { doubleHomeConsecutive: true })
   const schedule = generateMonthlySchedule({
@@ -197,7 +221,7 @@ test('September 2026 double TC is assigned on consecutive workdays', () => {
     generationSeed: 'september-demo',
   })
 
-  for (const week of getWorkdaysByWeek(2026, 8, [])) {
+  for (const week of schedule.weeks) {
     const assigned = homeDays(schedule, two.id, week.workdays)
     assert.equal(assigned.length, 2)
     const firstIndex = week.workdays.indexOf(assigned[0])

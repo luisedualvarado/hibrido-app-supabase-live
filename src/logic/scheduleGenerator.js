@@ -10,7 +10,7 @@
 
 import {
   getDaysInMonth, getWorkdaysByWeek, isWeekend, isHoliday, holidayName,
-  weekdayKey, rangeDates, WEEKDAY_LABEL,
+  weekdayKey, rangeDates, WEEKDAY_LABEL, toISO, parseISO,
 } from './dateUtils.js'
 import {
   getAllowedDatesForEmployee,
@@ -23,9 +23,48 @@ import {
 
 const MAX_OPERATIONAL_HOME_DAYS = 2
 const CONSECUTIVE_DOUBLE_HOME_MONTHS = new Set(['2026-8'])
+const COMPLETE_TRAILING_WEEK_MONTHS = new Set(['2026-8'])
 
 function shouldForceConsecutiveDoubleHome(year, month) {
   return CONSECUTIVE_DOUBLE_HOME_MONTHS.has(`${year}-${month}`)
+}
+
+function shouldCompleteTrailingWeek(year, month) {
+  return COMPLETE_TRAILING_WEEK_MONTHS.has(`${year}-${month}`)
+}
+
+function getScheduleDays(year, month) {
+  const days = getDaysInMonth(year, month)
+  if (!shouldCompleteTrailingWeek(year, month)) return days
+
+  const lastDay = parseISO(days[days.length - 1])
+  const lastWeekday = lastDay.getDay()
+  if (lastWeekday === 0 || lastWeekday === 5 || lastWeekday === 6) return days
+
+  const nextDays = []
+  for (let next = new Date(lastDay.getFullYear(), lastDay.getMonth(), lastDay.getDate() + 1); next.getDay() <= 5 && next.getDay() !== 0; next = new Date(next.getFullYear(), next.getMonth(), next.getDate() + 1)) {
+    nextDays.push(toISO(next))
+    if (next.getDay() === 5) break
+  }
+  return [...days, ...nextDays]
+}
+
+function getScheduleWeeks(year, month, holidays, days) {
+  const weeks = getWorkdaysByWeek(year, month, holidays)
+  if (!shouldCompleteTrailingWeek(year, month)) return weeks
+
+  const monthDays = new Set(getDaysInMonth(year, month))
+  const trailingDays = days.filter((iso) => !monthDays.has(iso))
+  if (trailingDays.length === 0) return weeks
+
+  const lastWeek = weeks[weeks.length - 1]
+  if (!lastWeek) return weeks
+  trailingDays.forEach((iso) => {
+    if (isWeekend(iso)) return
+    lastWeek.days.push(iso)
+    if (!isHoliday(iso, holidays)) lastWeek.workdays.push(iso)
+  })
+  return weeks
 }
 
 function seededTieBreaker(seed, ...parts) {
@@ -454,8 +493,8 @@ export function enforceRotationPolicy(schedule, employees) {
 export function generateMonthlySchedule(ctx) {
   const { employees, holidays, absences, manualOverrides, month, year, params, generationSeed = 0 } = ctx
   const forceConsecutiveDoubleHome = shouldForceConsecutiveDoubleHome(year, month)
-  const days = getDaysInMonth(year, month)
-  const weeks = getWorkdaysByWeek(year, month, holidays)
+  const days = getScheduleDays(year, month)
+  const weeks = getScheduleWeeks(year, month, holidays, days)
 
   // Elegibles: activos + híbrido aprobado
   const eligible = employees.filter(isRotationEligible)
