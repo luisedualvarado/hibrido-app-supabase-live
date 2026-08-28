@@ -53,7 +53,6 @@ const MIN_MONTH = 5
 const PUBLIC_READ_ONLY = import.meta.env.VITE_PUBLIC_READ_ONLY === 'true'
 const PUBLIC_PUBLISHED_JUNE_LOCK = import.meta.env.VITE_PUBLIC_PUBLISHED_JUNE === 'true'
 const PREVIEW_SNAPSHOT_URL = import.meta.env.VITE_PREVIEW_SNAPSHOT_URL || ''
-const DEMO_SEPTEMBER_2026 = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === 'september'
 const PUBLIC_VIEWS = ['dashboard', 'monthly', 'daily', 'desks', 'lockers']
 const PUBLIC_JUNE_OFFICE93_IDS = [
   'hilario-martin',
@@ -425,14 +424,11 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(() => ADMIN_ACCESS_ENABLED && loadAdminSession())
   const [authError, setAuthError] = useState('')
   const isReadOnly = PUBLIC_READ_ONLY && !isAdmin
-  const editableStored = isReadOnly || DEMO_SEPTEMBER_2026 ? {} : stored
-  const initialPeriod = useMemo(() => {
-    if (DEMO_SEPTEMBER_2026) return { year: 2026, month: 8 }
-    return normalizePeriod(
-      typeof editableStored.year === 'number' ? editableStored.year : now.getFullYear(),
-      typeof editableStored.month === 'number' ? editableStored.month : now.getMonth()
-    )
-  }, [editableStored, now])
+  const editableStored = isReadOnly ? {} : stored
+  const initialPeriod = useMemo(() => normalizePeriod(
+    typeof editableStored.year === 'number' ? editableStored.year : now.getFullYear(),
+    typeof editableStored.month === 'number' ? editableStored.month : now.getMonth()
+  ), [editableStored, now])
   const [view, setView] = useState('dashboard')
   const showPeriodControls = ['dashboard', 'monthly', 'daily', 'desks', 'office93', 'lockers'].includes(view)
   const [employees, setEmployees] = useState(mergeEmployeeSeatDefaults(editableStored.employees || initialEmployees))
@@ -939,7 +935,7 @@ export default function App() {
 
 
   useEffect(() => {
-    if (DEMO_SEPTEMBER_2026 || !PREVIEW_SNAPSHOT_URL || didHydratePreviewSnapshot) return
+    if (!PREVIEW_SNAPSHOT_URL || didHydratePreviewSnapshot) return
     let cancelled = false
     fetch(PREVIEW_SNAPSHOT_URL)
       .then((response) => {
@@ -1057,7 +1053,7 @@ export default function App() {
   }, [currentSnapshotJson])
 
   useEffect(() => {
-    if (DEMO_SEPTEMBER_2026 || !LIVE_SYNC_ENABLED) return undefined
+    if (!LIVE_SYNC_ENABLED) return undefined
     if (!isReadOnly && !isAdmin) {
       setLiveSyncReady(false)
       setLiveSyncStatus('idle')
@@ -1192,7 +1188,7 @@ export default function App() {
   }, [currentSnapshotJson, isReadOnly])
 
   useEffect(() => {
-    if (DEMO_SEPTEMBER_2026 || !LIVE_SYNC_ENABLED || isReadOnly || !isAdmin || !liveSyncReady) return undefined
+    if (!LIVE_SYNC_ENABLED || isReadOnly || !isAdmin || !liveSyncReady) return undefined
     if (currentSnapshotJson === lastDraftSnapshotJsonRef.current) return undefined
 
     setLiveSyncStatus('saving-draft')
