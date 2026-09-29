@@ -263,6 +263,20 @@ function nextPeriodMapWithEmployeeRemoved(map, employeeId) {
   )
 }
 
+function clonePeriodValue(value) {
+  return JSON.parse(JSON.stringify(value))
+}
+
+function copyPeriodValueIfMissing(map, sourceKey, targetKey, fallbackValue) {
+  if (Object.prototype.hasOwnProperty.call(map, targetKey)) return map
+  const hasSource = Object.prototype.hasOwnProperty.call(map, sourceKey)
+  if (!hasSource && fallbackValue === undefined) return map
+  return {
+    ...map,
+    [targetKey]: clonePeriodValue(hasSource ? map[sourceKey] : fallbackValue),
+  }
+}
+
 function makeEmployeeId(name) {
   return `${(name || 'persona').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${Date.now().toString(36)}`
@@ -582,6 +596,52 @@ export default function App() {
     const nextMonth = month === 11 ? 0 : month + 1
     const nextYear = month === 11 ? year + 1 : year
     const next = normalizePeriod(nextYear, nextMonth)
+    const nextPeriodKey = periodKeyFor(next.year, next.month)
+    const currentPeopleSnapshot = employeesForPeriod.map((employee) => ({
+      id: employee.id,
+      baseSeat: String(employee.baseSeat || '').trim(),
+      isFloating: Boolean(employee.isFloating),
+      hybridApproved: Boolean(employee.hybridApproved),
+      doubleHomeConsecutive: Boolean(employee.doubleHomeConsecutive),
+    }))
+
+    setEmployeeSeatOverridesByPeriod((prev) => copyPeriodValueIfMissing(
+      prev,
+      periodKey,
+      nextPeriodKey,
+      Object.fromEntries(currentPeopleSnapshot.map((employee) => [employee.id, employee.baseSeat]))
+    ))
+    setEmployeeFloatingOverridesByPeriod((prev) => copyPeriodValueIfMissing(
+      prev,
+      periodKey,
+      nextPeriodKey,
+      Object.fromEntries(currentPeopleSnapshot.map((employee) => [employee.id, employee.isFloating]))
+    ))
+    setEmployeePlanOverridesByPeriod((prev) => copyPeriodValueIfMissing(
+      prev,
+      periodKey,
+      nextPeriodKey,
+      Object.fromEntries(currentPeopleSnapshot.map((employee) => [
+        employee.id,
+        {
+          hybridApproved: employee.hybridApproved,
+          doubleHomeConsecutive: employee.doubleHomeConsecutive,
+        },
+      ]))
+    ))
+    setManualOffice93ByPeriod((prev) => copyPeriodValueIfMissing(
+      prev,
+      periodKey,
+      nextPeriodKey,
+      Array.from(new Set(computed.office93Assigned))
+    ))
+    setManualLockersByPeriod((prev) => copyPeriodValueIfMissing(prev, periodKey, nextPeriodKey, manualLockers))
+    setManualDeskAssignmentsByPeriod((prev) => copyPeriodValueIfMissing(prev, periodKey, nextPeriodKey, manualDeskAssignments))
+    setSavedWeeksByPeriod((prev) => (
+      Object.prototype.hasOwnProperty.call(prev, nextPeriodKey)
+        ? prev
+        : { ...prev, [nextPeriodKey]: [] }
+    ))
     setYear(next.year)
     setMonth(next.month)
     setGenerationTick((tick) => tick + 1)
