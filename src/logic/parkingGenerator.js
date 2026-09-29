@@ -4,7 +4,6 @@ import { floatingSeatPriorityByLocationForPeriod } from './deskLayouts.js'
 import { hasHardRestriction, isDateAllowedForEmployee, isFloatingSeatEligible, isRotationEligible, weeklyHomeTarget } from './rotationPolicy.js'
 
 const MAX_OPERATIONAL_HOME_DAYS = 2
-const MAX_EXCEPTIONAL_HOME_DAYS = 3
 
 const BLOCKED_FLOATING_SEATS_BY_LOCATION = {
   WEWORK: new Set(),
@@ -265,24 +264,20 @@ function hasAdjacentHome(cells, employeeId, iso, workdays) {
   )
 }
 
-function canUseOperationalHome(employee, iso, cells, week, allowOverMax = false) {
+function canUseOperationalHome(employee, iso, cells, week) {
   const cell = cells[`${employee.id}__${iso}`]
   if (!cell || cell.status !== 'OFFICE' || cell.source === 'MANUAL') return false
   if (!isRotationEligible(employee)) return false
   if (week) {
     const weeklyHomeDays = countHomeDays(cells, employee.id, week.workdays)
-    if (!allowOverMax && weeklyHomeDays >= MAX_OPERATIONAL_HOME_DAYS) return false
-    if (allowOverMax) {
-      if (weeklyHomeTarget(employee) < MAX_OPERATIONAL_HOME_DAYS) return false
-      if (weeklyHomeDays >= MAX_EXCEPTIONAL_HOME_DAYS) return false
-    }
+    if (weeklyHomeDays >= MAX_OPERATIONAL_HOME_DAYS) return false
   }
   if (hasHardRestriction(employee) && !isDateAllowedForEmployee(employee, iso)) return false
   if (employee.avoidConsecutiveHomeDays && week && hasAdjacentHome(cells, employee.id, iso, week.workdays)) return false
   return true
 }
 
-function setOperationalHome(cells, employee, iso, locationLabel, exceptional = false) {
+function setOperationalHome(cells, employee, iso, locationLabel) {
   const key = `${employee.id}__${iso}`
   cells[key] = {
     ...cells[key],
@@ -292,7 +287,6 @@ function setOperationalHome(cells, employee, iso, locationLabel, exceptional = f
       ...(cells[key].alerts || []),
       'Asignado automaticamente por cupo',
       `TC operativo por cupo para garantizar puesto flotante en ${locationLabel}`,
-      ...(exceptional ? ['TC operativo excepcional: se prioriza garantizar puesto flotante'] : []),
     ],
   }
 }
@@ -428,10 +422,10 @@ export function resolveFloatingSeatShortages(schedule, employees, days, params, 
       return currentSchedule()
     }
     const operationalHomeCountById = buildOperationalHomeCounts(cells)
-    const buildCandidates = (allowOverMax = false) => employees
+    const buildCandidates = () => employees
       .filter((employee) => occupiedRegularIds.has(employee.id))
       .filter((employee) => !employee.isFloating && employee.baseLocation === shortage.location)
-      .filter((employee) => canUseOperationalHome(employee, shortage.iso, cells, week, allowOverMax))
+      .filter((employee) => canUseOperationalHome(employee, shortage.iso, cells, week))
       .sort((left, right) => {
         const leftTarget = weeklyHomeTarget(left)
         const rightTarget = weeklyHomeTarget(right)
@@ -445,13 +439,7 @@ export function resolveFloatingSeatShortages(schedule, employees, days, params, 
         return left.name.localeCompare(right.name, 'es')
       })
 
-    const normalCandidates = buildCandidates(false)
-    let exceptional = false
-    let candidate = normalCandidates[0]
-    if (!candidate) {
-      candidate = buildCandidates(true)[0]
-      exceptional = Boolean(candidate)
-    }
+    const candidate = buildCandidates()[0]
     if (!candidate) {
       alerts.push({
         id: `FLOATER_SEAT_CAPACITY_UNRESOLVED-${alerts.length}`,
@@ -464,13 +452,13 @@ export function resolveFloatingSeatShortages(schedule, employees, days, params, 
       return currentSchedule()
     }
 
-    setOperationalHome(cells, candidate, shortage.iso, locationLabels[shortage.location], exceptional)
+    setOperationalHome(cells, candidate, shortage.iso, locationLabels[shortage.location])
     alerts.push({
       id: `FLOATER_SEAT_CAPACITY_HOME_ASSIGNED-${alerts.length}`,
       severity: 'INFO',
       date: shortage.iso,
       employeeId: candidate.id,
-      message: `${shortage.iso}: ${candidate.name} queda en TC operativo${exceptional ? ' excepcional' : ''} para liberar puesto flotante en ${locationLabels[shortage.location]}.`,
+      message: `${shortage.iso}: ${candidate.name} queda en TC operativo para liberar puesto flotante en ${locationLabels[shortage.location]}.`,
       rule: 'FLOATER_SEAT_CAPACITY_HOME_ASSIGNED',
       location: shortage.location,
     })

@@ -628,7 +628,7 @@ test('floating capacity TC does not exceed two weekly TC days', () => {
   assert.equal(resolved.cells[`${availableRegular.id}__${date}`].source, 'CAPACITY')
   assert.equal(days.filter((iso) => resolved.cells[`${cappedRegular.id}__${iso}`].status === 'HOME').length, 2)
 })
-test('floating seat rule allows third TC only for two-day employees', () => {
+test('floating seat rule does not assign a third TC to two-day employees', () => {
   const date = '2026-06-03'
   const previousOne = '2026-06-01'
   const previousTwo = '2026-06-02'
@@ -656,14 +656,13 @@ test('floating seat rule allows third TC only for two-day employees', () => {
   const resolved = resolveFloatingSeatShortages(schedule, people, [date], { ...params, seatsWeWork: 2, seats93: 0 })
   const { result } = assignFloatingSeats(resolved, people, [date], { ...params, seatsWeWork: 2, seats93: 0 })
 
-  assert.equal(resolved.cells[`${cappedRegular.id}__${date}`].status, 'HOME')
-  assert.equal(resolved.cells[`${cappedRegular.id}__${date}`].source, 'CAPACITY')
-  assert.equal(result[date].unseated.length, 0)
-  assert.equal(days.filter((iso) => resolved.cells[cappedRegular.id + '__' + iso].status === 'HOME').length, 3)
+  assert.equal(resolved.cells[`${cappedRegular.id}__${date}`].status, 'OFFICE')
+  assert.equal(result[date].unseated.length, 1)
+  assert.equal(days.filter((iso) => resolved.cells[cappedRegular.id + '__' + iso].status === 'HOME').length, 2)
   assert.equal(resolved.cells[alternativeRegular.id + '__' + previousOne].status, 'OFFICE')
-  assert.ok(resolved.cells[`${cappedRegular.id}__${date}`].alerts.some((alert) => /excepcional/i.test(alert)))
+  assert.ok(resolved.alerts.some((alert) => alert.rule === 'FLOATER_SEAT_CAPACITY_UNRESOLVED'))
 })
-test('floating seat rule uses exceptional TC instead of leaving a floater without seat', () => {
+test('floating seat rule leaves alert instead of assigning a third TC', () => {
   const date = '2026-06-03'
   const previousOne = '2026-06-01'
   const previousTwo = '2026-06-02'
@@ -689,12 +688,12 @@ test('floating seat rule uses exceptional TC instead of leaving a floater withou
   const resolved = resolveFloatingSeatShortages(schedule, people, [date], { ...params, seatsWeWork: 1, seats93: 0 })
   const { result } = assignFloatingSeats(resolved, people, [date], { ...params, seatsWeWork: 1, seats93: 0 })
 
-  assert.equal(resolved.cells[`${cappedRegular.id}__${date}`].status, 'HOME')
-  assert.equal(resolved.cells[`${cappedRegular.id}__${date}`].source, 'CAPACITY')
-  assert.equal(result[date].unseated.length, 0)
-  assert.ok(resolved.cells[`${cappedRegular.id}__${date}`].alerts.some((alert) => /excepcional/i.test(alert)))
+  assert.equal(resolved.cells[`${cappedRegular.id}__${date}`].status, 'OFFICE')
+  assert.equal(result[date].unseated.length, 1)
+  assert.equal(days.filter((iso) => resolved.cells[`${cappedRegular.id}__${iso}`].status === 'HOME').length, 2)
+  assert.ok(resolved.alerts.some((alert) => alert.rule === 'FLOATER_SEAT_CAPACITY_UNRESOLVED'))
 })
-test('floating exceptional TC never gives a third TC to one-day employees', () => {
+test('floating capacity TC never gives a third TC to anyone', () => {
   const date = '2026-06-03'
   const previousOne = '2026-06-01'
   const previousTwo = '2026-06-02'
@@ -724,10 +723,11 @@ test('floating exceptional TC never gives a third TC to one-day employees', () =
   const { result } = assignFloatingSeats(resolved, people, [date], { ...params, seatsWeWork: 2, seats93: 0 })
 
   assert.equal(resolved.cells[`${oneDayCapped.id}__${date}`].status, 'OFFICE')
-  assert.equal(resolved.cells[`${twoDayCapped.id}__${date}`].status, 'HOME')
+  assert.equal(resolved.cells[`${twoDayCapped.id}__${date}`].status, 'OFFICE')
   assert.equal(days.filter((iso) => resolved.cells[`${oneDayCapped.id}__${iso}`].status === 'HOME').length, 2)
-  assert.equal(days.filter((iso) => resolved.cells[`${twoDayCapped.id}__${iso}`].status === 'HOME').length, 3)
-  assert.equal(result[date].unseated.length, 0)
+  assert.equal(days.filter((iso) => resolved.cells[`${twoDayCapped.id}__${iso}`].status === 'HOME').length, 2)
+  assert.equal(result[date].unseated.length, 1)
+  assert.ok(resolved.alerts.some((alert) => alert.rule === 'FLOATER_SEAT_CAPACITY_UNRESOLVED'))
 })
 test('daily summary counts floating seats by actual assigned location', () => {
   const date = '2026-06-01'
