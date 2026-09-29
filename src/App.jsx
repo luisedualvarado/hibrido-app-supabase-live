@@ -430,7 +430,7 @@ export default function App() {
     typeof editableStored.month === 'number' ? editableStored.month : now.getMonth()
   ), [editableStored, now])
   const [view, setView] = useState('dashboard')
-  const showPeriodControls = ['dashboard', 'monthly', 'daily', 'desks', 'office93', 'lockers'].includes(view)
+  const showPeriodControls = ['dashboard', 'monthly', 'daily', 'desks', 'people', 'office93', 'lockers'].includes(view)
   const [employees, setEmployees] = useState(mergeEmployeeSeatDefaults(editableStored.employees || initialEmployees))
   const [holidays, setHolidays] = useState(editableStored.holidays || initialHolidays)
   const [absences, setAbsences] = useState(editableStored.absences || initialAbsences)
