@@ -22,14 +22,13 @@ import {
 } from './rotationPolicy.js'
 
 const MAX_OPERATIONAL_HOME_DAYS = 2
-const CONSECUTIVE_DOUBLE_HOME_MONTHS = new Set(['2026-8'])
 const COMPLETE_TRAILING_WEEK_MONTHS = new Set(['2026-8'])
 const MONTH_START_DATE_OVERRIDES = {
   '2026-9': '2026-10-05',
 }
 
 function shouldForceConsecutiveDoubleHome(year, month) {
-  return CONSECUTIVE_DOUBLE_HOME_MONTHS.has(`${year}-${month}`)
+  return year > 2026 || (year === 2026 && month >= 8)
 }
 
 function shouldCompleteTrailingWeek(year, month) {

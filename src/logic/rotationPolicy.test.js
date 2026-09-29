@@ -248,6 +248,34 @@ test('September 2026 double TC is assigned on consecutive workdays', () => {
     assert.equal(secondIndex - firstIndex, 1)
   }
 })
+
+test('October 2026 double TC is consecutive except for no-consecutive exception', () => {
+  const consecutive = employee('two-october', { doubleHomeConsecutive: true })
+  const exception = employee('two-october-exception', {
+    doubleHomeConsecutive: true,
+    avoidConsecutiveHomeDays: true,
+  })
+  const schedule = generateMonthlySchedule({
+    employees: [consecutive, exception],
+    holidays: [],
+    absences: [],
+    manualOverrides: [],
+    month: 9,
+    year: 2026,
+    params,
+    generationSeed: 'october-consecutive',
+  })
+
+  for (const week of schedule.weeks) {
+    const consecutiveDays = homeDays(schedule, consecutive.id, week.workdays)
+    assert.equal(consecutiveDays.length, 2)
+    assert.equal(week.workdays.indexOf(consecutiveDays[1]) - week.workdays.indexOf(consecutiveDays[0]), 1)
+
+    const exceptionDays = homeDays(schedule, exception.id, week.workdays)
+    assert.equal(exceptionDays.length, 2)
+    assert.notEqual(week.workdays.indexOf(exceptionDays[1]) - week.workdays.indexOf(exceptionDays[0]), 1)
+  }
+})
 test('capacity balancing uses automatic capacity TC without sending non-approved employees home', () => {
   const approved = employee('approved')
   const notApproved = employee('not-approved', { hybridApproved: false })
