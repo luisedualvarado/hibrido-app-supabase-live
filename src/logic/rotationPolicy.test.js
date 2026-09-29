@@ -208,6 +208,25 @@ test('September 2026 schedule completes trailing workweek', () => {
     '2026-10-02',
   ])
 })
+
+test('October 2026 schedule starts on October 5', () => {
+  const person = employee('october-person')
+  const schedule = generateMonthlySchedule({
+    employees: [person],
+    holidays: [],
+    absences: [],
+    manualOverrides: [],
+    month: 9,
+    year: 2026,
+    params,
+    generationSeed: 'october-start',
+  })
+
+  assert.equal(schedule.days.includes('2026-10-01'), false)
+  assert.equal(schedule.days.includes('2026-10-02'), false)
+  assert.equal(schedule.days[0], '2026-10-05')
+  assert.equal(schedule.weeks[0].workdays[0], '2026-10-05')
+})
 test('September 2026 double TC is assigned on consecutive workdays', () => {
   const two = employee('two-september', { doubleHomeConsecutive: true })
   const schedule = generateMonthlySchedule({

@@ -138,7 +138,7 @@ export function validateSchedule(schedule, employees, year, month, holidays, par
   const alerts = []
   const add = (severity, message, rule, extra = {}) =>
     alerts.push({ id: `${rule}-${alerts.length}`, severity, message, rule, ...extra })
-  const weeks = getWorkdaysByWeek(year, month, holidays)
+  const weeks = schedule.weeks?.length ? schedule.weeks : getWorkdaysByWeek(year, month, holidays)
   const eligible = employees.filter(isRotationEligible)
 
   validateCapacityRules(schedule, employees, params, add)

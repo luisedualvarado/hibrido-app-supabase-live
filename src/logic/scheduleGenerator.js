@@ -24,6 +24,9 @@ import {
 const MAX_OPERATIONAL_HOME_DAYS = 2
 const CONSECUTIVE_DOUBLE_HOME_MONTHS = new Set(['2026-8'])
 const COMPLETE_TRAILING_WEEK_MONTHS = new Set(['2026-8'])
+const MONTH_START_DATE_OVERRIDES = {
+  '2026-9': '2026-10-05',
+}
 
 function shouldForceConsecutiveDoubleHome(year, month) {
   return CONSECUTIVE_DOUBLE_HOME_MONTHS.has(`${year}-${month}`)
@@ -33,8 +36,15 @@ function shouldCompleteTrailingWeek(year, month) {
   return COMPLETE_TRAILING_WEEK_MONTHS.has(`${year}-${month}`)
 }
 
-function getScheduleDays(year, month) {
+function getVisibleMonthDays(year, month) {
+  const periodKey = `${year}-${month}`
+  const startDate = MONTH_START_DATE_OVERRIDES[periodKey]
   const days = getDaysInMonth(year, month)
+  return startDate ? days.filter((iso) => iso >= startDate) : days
+}
+
+function getScheduleDays(year, month) {
+  const days = getVisibleMonthDays(year, month)
   if (!shouldCompleteTrailingWeek(year, month)) return days
 
   const lastDay = parseISO(days[days.length - 1])
@@ -50,7 +60,14 @@ function getScheduleDays(year, month) {
 }
 
 function getScheduleWeeks(year, month, holidays, days) {
+  const visibleDays = new Set(days)
   const weeks = getWorkdaysByWeek(year, month, holidays)
+    .map((week) => ({
+      ...week,
+      days: week.days.filter((iso) => visibleDays.has(iso)),
+      workdays: week.workdays.filter((iso) => visibleDays.has(iso)),
+    }))
+    .filter((week) => week.days.length > 0 || week.workdays.length > 0)
   if (!shouldCompleteTrailingWeek(year, month)) return weeks
 
   const monthDays = new Set(getDaysInMonth(year, month))
