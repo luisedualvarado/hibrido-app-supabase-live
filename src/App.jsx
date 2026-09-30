@@ -158,6 +158,7 @@ const PUBLIC_JUNE_IVONNE_ABSENCE_DATES = new Set([
   '2026-06-04',
   '2026-06-05',
 ])
+const PUBLIC_2026_LAST_MONTH_INDEX = 9
 const STORAGE_KEY = 'hibrido-app-state-v2'
 const BACKUP_KEY = 'hibrido-app-state-v2-backup'
 const BACKUP_HISTORY_KEY = 'hibrido-app-state-v2-backups'
@@ -477,7 +478,7 @@ export default function App() {
   const [year, setYear] = useState(initialPeriod.year)
   const editableMonthOptions = MONTH_LABEL.map((_, index) => index)
     .filter((index) => year !== MIN_YEAR || index >= MIN_MONTH)
-  const publicLastMonth = year === MIN_YEAR ? Math.max(SEPTEMBER_2026_MONTH_INDEX, month) : 11
+  const publicLastMonth = year === MIN_YEAR ? Math.max(PUBLIC_2026_LAST_MONTH_INDEX, month) : 11
   const publicMonthOptions = editableMonthOptions.filter((index) => year !== MIN_YEAR || index <= publicLastMonth)
   const monthOptions = isReadOnly ? publicMonthOptions : editableMonthOptions
   const showMonthControl = showPeriodControls
