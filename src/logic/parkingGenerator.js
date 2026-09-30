@@ -73,6 +73,7 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
   }
   const compareSeat = (left, right) => String(left).localeCompare(String(right), 'es', { numeric: true })
   const sortByName = (left, right) => left.name.localeCompare(right.name, 'es')
+  const seatUsageByEmployee = {}
   const seatPriorityByLocation = floatingSeatPriorityByLocationForPeriod(schedule.year, schedule.month)
   const seatsByLocation = {
     WEWORK: [...seatPriorityByLocation.WEWORK],
@@ -88,6 +89,22 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
     acc[assignment.date] = [...(acc[assignment.date] || []), assignment]
     return acc
   }, {})
+  const seatUseCount = (employeeId, seat) => seatUsageByEmployee[employeeId]?.[seat] || 0
+  const recordSeatUse = (employeeId, seat) => {
+    seatUsageByEmployee[employeeId] = {
+      ...(seatUsageByEmployee[employeeId] || {}),
+      [seat]: seatUseCount(employeeId, seat) + 1,
+    }
+  }
+  const nextSeatForEmployee = (employee, remainingSeats) => {
+    if (!remainingSeats.length) return null
+    return [...remainingSeats]
+      .sort((left, right) => {
+        const usageDiff = seatUseCount(employee.id, left) - seatUseCount(employee.id, right)
+        if (usageDiff !== 0) return usageDiff
+        return remainingSeats.indexOf(left) - remainingSeats.indexOf(right)
+      })[0]
+  }
 
   const result = {}   // iso -> { assigned: [{empId, seat, location}], unseated: [empId], freeSeats, byLocation }
   const alerts = []
@@ -178,16 +195,19 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
         }
         assigned.push(manualAssignment)
         locationAssigned.push(manualAssignment)
+        recordSeatUse(assignment.employeeId, assignment.seat)
         pendingFloaters.splice(employeeIndex, 1)
         remainingSeats.splice(seatIndex, 1)
       })
 
       pendingFloaters.forEach((employee) => {
-        const seat = remainingSeats.shift()
+        const seat = nextSeatForEmployee(employee, remainingSeats)
         if (seat) {
           const automaticAssignment = { empId: employee.id, seat, location, alt: false, manual: false }
           assigned.push(automaticAssignment)
           locationAssigned.push(automaticAssignment)
+          recordSeatUse(employee.id, seat)
+          remainingSeats.splice(remainingSeats.indexOf(seat), 1)
           return
         }
         unseated.push(employee.id)

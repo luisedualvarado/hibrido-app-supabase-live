@@ -111,6 +111,29 @@ test('September floating seat assignment prioritizes new seats', () => {
   assert.equal(result[date].assignedByEmp[weFloater.id]?.seat, 'W1')
   assert.equal(result[date].assignedByEmp[officeFloater.id]?.seat, 'ZZ')
 })
+test('floating seat assignment rotates seats across the month', () => {
+  const days = ['2026-09-01', '2026-09-02', '2026-09-03']
+  const floater = employee('rotating-floater', { isFloating: true })
+  const schedule = {
+    year: 2026,
+    month: 8,
+    days,
+    weeks: [{ weekId: '2026-W36', workdays: days }],
+    alerts: [],
+    cells: Object.fromEntries(days.map((date) => [`${floater.id}__${date}`, {
+      employeeId: floater.id,
+      date,
+      status: 'OFFICE',
+      source: 'TEST',
+      alerts: [],
+    }])),
+  }
+
+  const { result } = assignFloatingSeats(schedule, [floater], days, { ...params, seatsWeWork: 42, seats93: 0 })
+  const assignedSeats = days.map((date) => result[date].assignedByEmp[floater.id]?.seat)
+
+  assert.deepEqual(assignedSeats, ['W1', 'W2', 'W3'])
+})
 test('September WeWork floaters can use new W desks after legacy desks are occupied', () => {
   const date = '2026-09-01'
   const legacySeats = PHYSICAL_SEATS_BY_LOCATION.WEWORK
