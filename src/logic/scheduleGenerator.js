@@ -28,7 +28,7 @@ const MONTH_START_DATE_OVERRIDES = {
 }
 
 function shouldForceConsecutiveDoubleHome(year, month) {
-  return year > 2026 || (year === 2026 && month >= 8)
+  return year > 2026 || (year === 2026 && month >= 9)
 }
 
 function shouldCompleteTrailingWeek(year, month) {

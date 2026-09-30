@@ -227,7 +227,7 @@ test('October 2026 schedule starts on October 5', () => {
   assert.equal(schedule.days[0], '2026-10-05')
   assert.equal(schedule.weeks[0].workdays[0], '2026-10-05')
 })
-test('September 2026 double TC is assigned on consecutive workdays', () => {
+test('September 2026 double TC keeps the previous non-forced distribution', () => {
   const two = employee('two-september', { doubleHomeConsecutive: true })
   const schedule = generateMonthlySchedule({
     employees: [two],
@@ -240,13 +240,14 @@ test('September 2026 double TC is assigned on consecutive workdays', () => {
     generationSeed: 'september-demo',
   })
 
-  for (const week of schedule.weeks) {
+  const hasSeparatedPair = schedule.weeks.some((week) => {
     const assigned = homeDays(schedule, two.id, week.workdays)
     assert.equal(assigned.length, 2)
     const firstIndex = week.workdays.indexOf(assigned[0])
     const secondIndex = week.workdays.indexOf(assigned[1])
-    assert.equal(secondIndex - firstIndex, 1)
-  }
+    return secondIndex - firstIndex > 1
+  })
+  assert.equal(hasSeparatedPair, true)
 })
 
 test('October 2026 double TC is consecutive except for no-consecutive exception', () => {
