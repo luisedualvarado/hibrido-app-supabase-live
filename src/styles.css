@@ -497,10 +497,6 @@ tr:hover td { background: var(--gray-50); }
   border: 1px dashed rgba(224,123,57,.55);
 }
 .cell.hasAlert { box-shadow: inset 0 0 0 2px var(--red); }
-.cell.hasNotice { box-shadow: inset 0 0 0 2px var(--amber); }
-.cell.manual {
-  box-shadow: inset 0 0 0 2px var(--amber);
-}
 .cell.saved {
   box-shadow: inset 0 0 0 2px var(--purple);
 }

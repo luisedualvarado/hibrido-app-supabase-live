@@ -86,9 +86,6 @@ export default function MonthlySchedule({
   const savedWeeksMap = useMemo(() => new Map(savedWeeks.map((entry) => [entry.weekId, entry])), [savedWeeks])
   const savedDates = useMemo(() => new Set(savedWeeks.flatMap((entry) => entry.workdays || [])), [savedWeeks])
   const hasSavedWeeks = !hideAlerts && savedWeeks.length > 0
-  const hasAmberNotices = useMemo(() => (
-    !hideAlerts && Object.values(schedule.cells || {}).some((cell) => cellAlertTone(cell, savedDates.has(cell.date)) === 'amber')
-  ), [hideAlerts, schedule.cells, savedDates])
 
   return (
     <div>
@@ -183,7 +180,7 @@ export default function MonthlySchedule({
                   return (
                     <td key={iso} className="daycell">
                       <div
-                        className={`cell ${cellClass(c, e)} ${readOnly ? 'readOnly' : ''} ${isSaved ? 'saved' : ''} ${isManual ? 'manual' : ''} ${isCapacity ? 'capacity' : ''} ${showCellOutline && alertTone === 'red' ? 'hasAlert' : ''} ${showCellOutline && alertTone === 'amber' ? 'hasNotice' : ''}`}
+                        className={`cell ${cellClass(c, e)} ${readOnly ? 'readOnly' : ''} ${isSaved ? 'saved' : ''} ${isManual ? 'manual' : ''} ${isCapacity ? 'capacity' : ''} ${showCellOutline && alertTone === 'red' ? 'hasAlert' : ''}`}
                         title={hideAlerts ? '' : c.alerts && c.alerts.join(' · ')}
                         onClick={() => {
                           if (!readOnly) setEditing({ employee: e, iso, cell: c })
@@ -212,7 +209,6 @@ export default function MonthlySchedule({
         <span><span className="lg-chip" style={{ background: 'var(--orange-bg)' }} /> AUS · Ausencia</span>
         {!hideAlerts && <span><span className="lg-chip" style={{ boxShadow: 'inset 0 0 0 2px var(--red)' }} /> Borde rojo · Restricción no cumplida</span>}
         {hasSavedWeeks && <span><span className="lg-chip" style={{ boxShadow: 'inset 0 0 0 2px var(--purple)' }} /> Borde morado - Guardado</span>}
-        {hasAmberNotices && <span><span className="lg-chip" style={{ boxShadow: 'inset 0 0 0 2px var(--amber)' }} /> Borde ambar - Revisar alerta</span>}
       </div>
 
       {editing && (
