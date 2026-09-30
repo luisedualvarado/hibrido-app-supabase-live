@@ -253,6 +253,29 @@ function applyEmployeePlanOverrides(employeeList, planOverrides = EMPTY_OBJECT) 
   })
 }
 
+function periodValue(year, month) {
+  return year * 12 + month
+}
+
+function parsePeriodKey(key) {
+  if (typeof key !== 'string') return null
+  const [yearText, monthText] = key.split('-')
+  const year = Number(yearText)
+  const month = Number(monthText)
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return null
+  return { year, month }
+}
+
+function isEmployeeVisibleInPeriod(employee, year, month) {
+  const start = parsePeriodKey(employee.startPeriod)
+  if (!start) return true
+  return periodValue(year, month) >= periodValue(start.year, start.month)
+}
+
+function filterEmployeesForPeriod(employeeList, year, month) {
+  return employeeList.filter((employee) => isEmployeeVisibleInPeriod(employee, year, month))
+}
+
 function nextPeriodMapWithEmployeeRemoved(map, employeeId) {
   return Object.fromEntries(
     Object.entries(map).map(([key, entries]) => {
@@ -493,12 +516,12 @@ export default function App() {
   const employeesForPeriod = useMemo(
     () => applyEmployeeFloatingOverrides(
       applyEmployeePlanOverrides(
-        applyEmployeeSeatOverrides(employees, employeeSeatOverrides),
+        applyEmployeeSeatOverrides(filterEmployeesForPeriod(employees, year, month), employeeSeatOverrides),
         employeePlanOverrides
       ),
       employeeFloatingOverrides
     ),
-    [employees, employeeSeatOverrides, employeePlanOverrides, employeeFloatingOverrides]
+    [employees, year, month, employeeSeatOverrides, employeePlanOverrides, employeeFloatingOverrides]
   )
   const periodLabel = `${MONTH_LABEL[month]} ${year}`
   const savedWeeks = savedWeeksByPeriod[periodKey] || EMPTY_ARRAY
@@ -851,6 +874,7 @@ export default function App() {
       setEmployees((prev) => [...prev, {
         ...emp,
         id,
+        startPeriod: periodKey,
         baseSeat: nextSeat,
         isFloating: nextFloating,
         hybridApproved: nextHybridApproved,
