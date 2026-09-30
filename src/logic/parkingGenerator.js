@@ -74,6 +74,8 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
   const compareSeat = (left, right) => String(left).localeCompare(String(right), 'es', { numeric: true })
   const sortByName = (left, right) => left.name.localeCompare(right.name, 'es')
   const seatUsageByEmployee = {}
+  const lastSeatByEmployee = {}
+  const globalSeatUsage = {}
   const seatPriorityByLocation = floatingSeatPriorityByLocationForPeriod(schedule.year, schedule.month)
   const seatsByLocation = {
     WEWORK: [...seatPriorityByLocation.WEWORK],
@@ -90,19 +92,42 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
     return acc
   }, {})
   const seatUseCount = (employeeId, seat) => seatUsageByEmployee[employeeId]?.[seat] || 0
+  const globalSeatUseCount = (location, seat) => globalSeatUsage[location]?.[seat] || 0
+  const seededTieBreaker = (...parts) => {
+    const text = parts.join('::')
+    let hash = 2166136261
+    for (let index = 0; index < text.length; index++) {
+      hash ^= text.charCodeAt(index)
+      hash = Math.imul(hash, 16777619)
+    }
+    return (hash >>> 0) / 4294967295
+  }
   const recordSeatUse = (employeeId, seat) => {
     seatUsageByEmployee[employeeId] = {
       ...(seatUsageByEmployee[employeeId] || {}),
       [seat]: seatUseCount(employeeId, seat) + 1,
     }
+    lastSeatByEmployee[employeeId] = seat
   }
-  const nextSeatForEmployee = (employee, remainingSeats) => {
+  const recordGlobalSeatUse = (location, seat) => {
+    globalSeatUsage[location] = {
+      ...(globalSeatUsage[location] || {}),
+      [seat]: globalSeatUseCount(location, seat) + 1,
+    }
+  }
+  const nextSeatForEmployee = (employee, remainingSeats, location, iso) => {
     if (!remainingSeats.length) return null
+    if (!seatUsageByEmployee[employee.id]) return remainingSeats[0]
     return [...remainingSeats]
       .sort((left, right) => {
         const usageDiff = seatUseCount(employee.id, left) - seatUseCount(employee.id, right)
         if (usageDiff !== 0) return usageDiff
-        return remainingSeats.indexOf(left) - remainingSeats.indexOf(right)
+        const lastSeatDiff = (lastSeatByEmployee[employee.id] === left ? 1 : 0) - (lastSeatByEmployee[employee.id] === right ? 1 : 0)
+        if (lastSeatDiff !== 0) return lastSeatDiff
+        const globalDiff = globalSeatUseCount(location, left) - globalSeatUseCount(location, right)
+        if (globalDiff !== 0) return globalDiff
+        return seededTieBreaker(schedule.year, schedule.month, iso, employee.id, left) -
+          seededTieBreaker(schedule.year, schedule.month, iso, employee.id, right)
       })[0]
   }
 
@@ -196,17 +221,19 @@ export function assignFloatingSeats(schedule, employees, days, params, manualDes
         assigned.push(manualAssignment)
         locationAssigned.push(manualAssignment)
         recordSeatUse(assignment.employeeId, assignment.seat)
+        recordGlobalSeatUse(location, assignment.seat)
         pendingFloaters.splice(employeeIndex, 1)
         remainingSeats.splice(seatIndex, 1)
       })
 
       pendingFloaters.forEach((employee) => {
-        const seat = nextSeatForEmployee(employee, remainingSeats)
+        const seat = nextSeatForEmployee(employee, remainingSeats, location, iso)
         if (seat) {
           const automaticAssignment = { empId: employee.id, seat, location, alt: false, manual: false }
           assigned.push(automaticAssignment)
           locationAssigned.push(automaticAssignment)
           recordSeatUse(employee.id, seat)
+          recordGlobalSeatUse(location, seat)
           remainingSeats.splice(remainingSeats.indexOf(seat), 1)
           return
         }
