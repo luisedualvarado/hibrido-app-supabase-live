@@ -158,7 +158,7 @@ const PUBLIC_JUNE_IVONNE_ABSENCE_DATES = new Set([
   '2026-06-04',
   '2026-06-05',
 ])
-const PUBLIC_2026_LAST_MONTH_INDEX = 9
+const PUBLIC_2026_LAST_MONTH_INDEX = 10
 const STORAGE_KEY = 'hibrido-app-state-v2'
 const BACKUP_KEY = 'hibrido-app-state-v2-backup'
 const BACKUP_HISTORY_KEY = 'hibrido-app-state-v2-backups'
