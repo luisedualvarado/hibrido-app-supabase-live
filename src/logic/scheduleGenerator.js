@@ -26,6 +26,9 @@ const COMPLETE_TRAILING_WEEK_MONTHS = new Set(['2026-8'])
 const MONTH_START_DATE_OVERRIDES = {
   '2026-9': '2026-10-05',
 }
+const MONTH_END_DATE_OVERRIDES = {
+  '2026-10': '2026-11-29',
+}
 
 function shouldForceConsecutiveDoubleHome(year, month) {
   return year > 2026 || (year === 2026 && month >= 9)
@@ -38,8 +41,9 @@ function shouldCompleteTrailingWeek(year, month) {
 function getVisibleMonthDays(year, month) {
   const periodKey = `${year}-${month}`
   const startDate = MONTH_START_DATE_OVERRIDES[periodKey]
+  const endDate = MONTH_END_DATE_OVERRIDES[periodKey]
   const days = getDaysInMonth(year, month)
-  return startDate ? days.filter((iso) => iso >= startDate) : days
+  return days.filter((iso) => (!startDate || iso >= startDate) && (!endDate || iso <= endDate))
 }
 
 function getScheduleDays(year, month) {
